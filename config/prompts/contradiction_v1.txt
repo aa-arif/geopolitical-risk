@@ -1,0 +1,20 @@
+You are monitoring geopolitical data for anomalies that contradict the current risk assessment.
+
+COUNTRY: {country_name}
+CURRENT PREDICTION: {current_probability}% probability of instability
+CURRENT REASONING CHAIN SUMMARY: {reasoning_summary}
+
+NEW DATA RECEIVED:
+{new_data_summary}
+
+QUESTION: Does this new information significantly contradict, support, or have no meaningful effect on the current analysis?
+
+Return JSON:
+{{
+  "assessment": "contradicts" | "supports" | "neutral",
+  "explanation": str,
+  "affected_factors": [str],
+  "suggested_probability_direction": "increase" | "decrease" | "unchanged",
+  "magnitude": "minor" | "moderate" | "major",
+  "trigger_reprediction": boolean
+}}

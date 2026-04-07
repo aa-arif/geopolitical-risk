@@ -1,0 +1,31 @@
+{
+  "name": "Bangladesh",
+  "acled_country_code": "BGD",
+  "iso3": "BGD",
+  "polity_code": 1,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 24.6,
+  "gdp_per_capita_usd": 2688,
+  "population_millions": 172.9,
+  "terrain_ruggedness": "low",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["IND", "MMR"],
+  "v_dem_liberal_democracy_index": 0.18,
+  "v_dem_electoral_democracy_index": 0.22,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "Interim Government (Muhammad Yunus)",
+    "Awami League (Sheikh Hasina, exiled)",
+    "Bangladesh Nationalist Party (BNP)",
+    "Jamaat-e-Islami",
+    "Bangladesh military",
+    "Student movement leaders"
+  ],
+  "risk_context": "Post-2024 political crisis following mass student protests that ousted PM Sheikh Hasina. Interim government led by Muhammad Yunus faces pressure from multiple political factions. Garment industry (largest export) creates global supply chain exposure. Rohingya refugee burden from Myanmar. History of military coups and political violence between AL and BNP.",
+  "news_sources_rss": [
+    "https://www.thedailystar.net/rss.xml",
+    "https://bdnews24.com/feed",
+    "https://www.dhakatribune.com/feed"
+  ],
+  "event_threshold_90th_percentile": null
+}

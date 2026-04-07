@@ -1,0 +1,32 @@
+{
+  "name": "Turkey",
+  "acled_country_code": "TUR",
+  "iso3": "TUR",
+  "polity_code": 3,
+  "polity_category": "partial_democracy",
+  "infant_mortality_per_1000": 8.6,
+  "gdp_per_capita_usd": 10674,
+  "population_millions": 85.8,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 3,
+  "neighboring_countries": ["ARM", "AZE", "BGR", "GEO", "GRC", "IRN", "IRQ", "SYR"],
+  "v_dem_liberal_democracy_index": 0.14,
+  "v_dem_electoral_democracy_index": 0.26,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "President Erdogan (AKP)",
+    "CHP opposition (Ozgur Ozel)",
+    "HDP/DEM Party (Kurdish)",
+    "Ekrem Imamoglu (Istanbul mayor, imprisoned)",
+    "Turkish military (TSK)",
+    "PKK / Kurdish insurgency",
+    "Syrian refugee population"
+  ],
+  "risk_context": "Democratic backsliding under Erdogan with imprisonment of opposition leader Imamoglu sparking protests. NATO member with independent foreign policy. Kurdish insurgency (PKK) in southeast. Military operations in northern Syria/Iraq. Syrian refugee tensions. Economic volatility with high inflation. 2023 earthquake aftermath. Regional power broker in multiple conflicts.",
+  "news_sources_rss": [
+    "https://www.dailysabah.com/rssFeed/main",
+    "https://www.hurriyetdailynews.com/rss",
+    "https://ahvalnews.com/feed"
+  ],
+  "event_threshold_90th_percentile": null
+}

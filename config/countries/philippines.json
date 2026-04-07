@@ -1,0 +1,32 @@
+{
+  "name": "Philippines",
+  "acled_country_code": "PHL",
+  "iso3": "PHL",
+  "polity_code": 8,
+  "polity_category": "democracy",
+  "infant_mortality_per_1000": 21.5,
+  "gdp_per_capita_usd": 3905,
+  "population_millions": 117.3,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 4,
+  "neighboring_countries": [],
+  "v_dem_liberal_democracy_index": 0.35,
+  "v_dem_electoral_democracy_index": 0.45,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "President Marcos Jr.",
+    "VP Sara Duterte",
+    "Former President Rodrigo Duterte",
+    "Communist Party / NPA",
+    "MILF / BARMM",
+    "Abu Sayyaf / ISIS-aligned groups",
+    "Philippine military (AFP)"
+  ],
+  "risk_context": "Marcos-Duterte political alliance fracturing, with VP Sara Duterte making veiled threats. South China Sea tensions with China over Second Thomas Shoal. Active communist insurgency (NPA) declining but present. Bangsamoro transition in Mindanao. History of coup attempts and people power movements. Major US treaty ally with enhanced defense cooperation.",
+  "news_sources_rss": [
+    "https://www.rappler.com/feed/",
+    "https://newsinfo.inquirer.net/feed",
+    "https://www.philstar.com/rss/nation"
+  ],
+  "event_threshold_90th_percentile": null
+}

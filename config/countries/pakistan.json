@@ -1,0 +1,31 @@
+{
+  "name": "Pakistan",
+  "acled_country_code": "PAK",
+  "iso3": "PAK",
+  "polity_code": 2,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 52.3,
+  "gdp_per_capita_usd": 1585,
+  "population_millions": 240.5,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["AFG", "CHN", "IND", "IRN"],
+  "v_dem_liberal_democracy_index": 0.20,
+  "v_dem_electoral_democracy_index": 0.28,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "PM Shehbaz Sharif (PML-N)",
+    "Imran Khan (PTI, imprisoned)",
+    "Pakistan military / ISI (Gen Munir)",
+    "PPP (Bilawal Bhutto)",
+    "TTP (Tehrik-i-Taliban Pakistan)",
+    "Baloch separatist groups"
+  ],
+  "risk_context": "Nuclear state with recurring civil-military tensions. PTI protests and crackdown following Imran Khan's imprisonment. Contested 2024 election results. Active TTP insurgency in tribal areas, Baloch separatism in southwest. IMF bailout conditionality creating economic stress. Afghanistan border instability post-Taliban takeover. India tensions over Kashmir.",
+  "news_sources_rss": [
+    "https://www.dawn.com/feed",
+    "https://www.geo.tv/rss/1/0",
+    "https://tribune.com.pk/feed"
+  ],
+  "event_threshold_90th_percentile": null
+}

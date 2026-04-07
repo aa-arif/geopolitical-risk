@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.pyc
+data/geopolitical.db
+data/calibration_model.pkl
+data/articles/
+node_modules/
+frontend/build/
+frontend/dist/
+.DS_Store

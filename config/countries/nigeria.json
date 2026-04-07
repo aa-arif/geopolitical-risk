@@ -1,0 +1,30 @@
+{
+  "name": "Nigeria",
+  "acled_country_code": "NGA",
+  "iso3": "NGA",
+  "polity_code": 4,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 70.4,
+  "gdp_per_capita_usd": 2184,
+  "population_millions": 223.8,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 2,
+  "neighboring_countries": ["BEN", "CMR", "TCD", "NER"],
+  "v_dem_liberal_democracy_index": 0.28,
+  "v_dem_electoral_democracy_index": 0.36,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "President Tinubu (APC)",
+    "PDP opposition",
+    "Boko Haram / ISWAP",
+    "IPOB / Biafra separatists",
+    "Nigerian military"
+  ],
+  "risk_context": "Factionalized democracy with active insurgency in northeast (Boko Haram/ISWAP), separatist movement in southeast (IPOB), herder-farmer conflicts in middle belt, recent fuel subsidy removal causing economic stress, and naira devaluation. ECOWAS leadership role creates regional exposure.",
+  "news_sources_rss": [
+    "https://punchng.com/feed/",
+    "https://www.premiumtimesng.com/feed",
+    "https://www.vanguardngr.com/feed/"
+  ],
+  "event_threshold_90th_percentile": null
+}

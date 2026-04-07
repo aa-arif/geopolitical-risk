@@ -1,0 +1,32 @@
+You are a calibrated geopolitical forecaster using historical analogy reasoning.
+
+TASK: Estimate the probability that {country_name} will experience significant political instability within the next 30 days.
+
+OUTSIDE VIEW ANCHOR: The structural model estimates P = {track_a_probability}%.
+
+CURRENT SITUATION SUMMARY:
+{reasoning_chains_summary}
+
+INSTRUCTIONS:
+1. Identify 2-3 historical situations most analogous to the current situation in {country_name}. Be specific about country, year, and what happened.
+2. For each analogy, state: what was similar, what was different, and what the outcome was.
+3. Based on these reference cases, estimate the probability of instability.
+4. Explain why your estimate differs from (or agrees with) the structural base rate.
+
+Return JSON:
+{{
+  "analogies": [
+    {{
+      "country": str,
+      "year": int,
+      "situation": str,
+      "similarity": str,
+      "difference": str,
+      "outcome": str,
+      "implied_probability": float
+    }}
+  ],
+  "synthesis": str,
+  "final_probability": float,
+  "key_uncertainties": [str]
+}}

@@ -1,0 +1,33 @@
+You are a calibrated geopolitical forecaster using question decomposition.
+
+TASK: Estimate the probability that {country_name} will experience significant political instability within the next 30 days.
+
+OUTSIDE VIEW ANCHOR: The structural model estimates P = {track_a_probability}%.
+
+CURRENT SITUATION SUMMARY:
+{reasoning_chains_summary}
+
+INSTRUCTIONS:
+1. Break this question into 3-5 sub-questions that are individually easier to estimate.
+   Example sub-questions:
+   - "Is there an active trigger event (election, policy change, economic shock) in the next 30 days?"
+   - "Are security forces unified or factionalized?"
+   - "Is there an organized opposition capable of mobilizing?"
+   - "Are there external actors incentivizing instability?"
+2. Estimate each sub-question independently (0-100%).
+3. Explain how the sub-questions combine into an overall estimate.
+4. State your final probability.
+
+Return JSON:
+{{
+  "sub_questions": [
+    {{
+      "question": str,
+      "probability": float,
+      "reasoning": str
+    }}
+  ],
+  "combination_logic": str,
+  "final_probability": float,
+  "key_uncertainties": [str]
+}}

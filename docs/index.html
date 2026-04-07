@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geopolitical Instability Risk Monitor</title>
+<style>
+  :root {
+    --bg: #0b1220;
+    --surface: #111b2b;
+    --border: #1e2d42;
+    --text: #c8d6e5;
+    --text-dim: #6b7f99;
+    --accent: #4fc3f7;
+    --red: #ef5350;
+    --orange: #ffa726;
+    --yellow: #ffee58;
+    --green: #66bb6a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.6;
+    padding: 2rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1.5rem;
+    margin-bottom: 2rem;
+  }
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: -0.02em;
+  }
+  .date {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-top: 0.25rem;
+    font-family: 'JetBrains Mono', 'Consolas', monospace;
+  }
+  .subtitle {
+    font-size: 0.9rem;
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 2.5rem;
+  }
+  thead th {
+    text-align: left;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    padding: 0.6rem 0.8rem;
+    border-bottom: 2px solid var(--border);
+  }
+  thead th.num { text-align: right; }
+  tbody td {
+    padding: 0.9rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  tbody tr:hover { background: rgba(79, 195, 247, 0.04); }
+
+  .country-name {
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95rem;
+  }
+  .country-iso {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .polity-tag {
+    display: inline-block;
+    font-size: 0.68rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: 3px;
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 0.2rem;
+  }
+  .polity-anocracy { background: rgba(255, 167, 38, 0.15); color: var(--orange); }
+  .polity-democracy { background: rgba(102, 187, 106, 0.15); color: var(--green); }
+
+  .prob {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 1rem;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .prob-small {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    text-align: right;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  .bar-cell { width: 180px; }
+  .bar-track {
+    width: 100%;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.4rem;
+  }
+  .bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+
+  .risk-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .risk-critical .prob, .risk-critical .risk-label { color: var(--red); }
+  .risk-high .prob, .risk-high .risk-label { color: var(--orange); }
+  .risk-elevated .prob, .risk-elevated .risk-label { color: var(--yellow); }
+  .risk-low .prob, .risk-low .risk-label { color: var(--green); }
+
+  .risk-critical .bar-fill { background: var(--red); }
+  .risk-high .bar-fill { background: var(--orange); }
+  .risk-elevated .bar-fill { background: var(--yellow); }
+  .risk-low .bar-fill { background: var(--green); }
+
+  .factors {
+    font-size: 0.82rem;
+    color: var(--text);
+    max-width: 340px;
+  }
+
+  .components {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace;
+    margin-top: 0.3rem;
+  }
+
+  .methodology {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1.5rem;
+    margin-top: 1rem;
+  }
+  .methodology h2 {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #fff;
+    margin-bottom: 0.75rem;
+  }
+  .methodology p {
+    font-size: 0.82rem;
+    color: var(--text-dim);
+    margin-bottom: 0.6rem;
+    line-height: 1.65;
+  }
+  .methodology code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    background: rgba(79, 195, 247, 0.08);
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    color: var(--accent);
+  }
+  .methodology .formula {
+    display: block;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.8rem 1rem;
+    margin: 0.8rem 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--accent);
+    line-height: 1.7;
+    overflow-x: auto;
+  }
+  .methodology .ref {
+    font-size: 0.75rem;
+    font-style: italic;
+  }
+
+  footer {
+    margin-top: 2rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Geopolitical Instability Risk Monitor</h1>
+  <div class="date">2026-04-06 &middot; Track A Structural Model &middot; 30-Day Window</div>
+  <div class="subtitle">PITF-validated logistic regression base rates for 5 target countries. These structural probabilities serve as the outside-view anchor before any current-events adjustment.</div>
+</header>
+
+<table>
+  <thead>
+    <tr>
+      <th>Country</th>
+      <th class="num">PITF Base</th>
+      <th class="num">Combined</th>
+      <th style="width: 180px;">Risk</th>
+      <th>Key Structural Factors</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Nigeria -->
+    <tr class="risk-high">
+      <td>
+        <div class="country-name">Nigeria</div>
+        <div class="country-iso">NGA</div>
+        <span class="polity-tag polity-anocracy">Polity +4 &middot; Factionalized Anocracy</span>
+      </td>
+      <td class="prob">18.7%</td>
+      <td class="prob">23.6%</td>
+      <td class="bar-cell">
+        <span class="risk-label">High</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 23.6%"></div></div>
+        <div class="components">Vuln 0.79 &middot; GPR +0.3</div>
+      </td>
+      <td class="factors">Factionalized partial democracy with highest infant mortality in set (70.4/1k). Active insurgencies (Boko Haram/ISWAP, IPOB) and recent fuel subsidy removal amplify structural fragility. US military presence risks further polarization.</td>
+    </tr>
+    <!-- Pakistan -->
+    <tr class="risk-high">
+      <td>
+        <div class="country-name">Pakistan</div>
+        <div class="country-iso">PAK</div>
+        <span class="polity-tag polity-anocracy">Polity +2 &middot; Factionalized Anocracy</span>
+      </td>
+      <td class="prob">17.2%</td>
+      <td class="prob">22.4%</td>
+      <td class="bar-cell">
+        <span class="risk-label">High</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 22.4%"></div></div>
+        <div class="components">Vuln 0.87 &middot; GPR +0.4</div>
+      </td>
+      <td class="factors">Highest structural vulnerability (0.87) driven by lowest GDP/capita ($1,585), high infant mortality (52.3/1k), rugged terrain, and weak liberal democracy index (0.20). Only 1 year since last instability event; TTP insurgency active.</td>
+    </tr>
+    <!-- Bangladesh -->
+    <tr class="risk-elevated">
+      <td>
+        <div class="country-name">Bangladesh</div>
+        <div class="country-iso">BGD</div>
+        <span class="polity-tag polity-anocracy">Polity +1 &middot; Factionalized Anocracy</span>
+      </td>
+      <td class="prob">12.5%</td>
+      <td class="prob">15.9%</td>
+      <td class="bar-cell">
+        <span class="risk-label">Elevated</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 15.9%"></div></div>
+        <div class="components">Vuln 0.76 &middot; GPR +0.5</div>
+      </td>
+      <td class="factors">Post-crisis interim government following 2024 ouster of PM Hasina. Highest GPR trend (+0.5) in set reflects acute political uncertainty. Only 1 year since last instability; lower infant mortality (24.6/1k) partially offsets anocracy risk.</td>
+    </tr>
+    <!-- Turkey -->
+    <tr class="risk-low">
+      <td>
+        <div class="country-name">Turkey</div>
+        <div class="country-iso">TUR</div>
+        <span class="polity-tag polity-anocracy">Polity +3 &middot; Partial Democracy</span>
+      </td>
+      <td class="prob">7.1%</td>
+      <td class="prob">8.6%</td>
+      <td class="bar-cell">
+        <span class="risk-label">Low</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 8.6%"></div></div>
+        <div class="components">Vuln 0.60 &middot; GPR +0.4</div>
+      </td>
+      <td class="factors">Anocracy flag triggers (+3 polity), but low infant mortality (8.6/1k) and higher GDP ($10,674) substantially reduce PITF base rate. Democratic backsliding and opposition crackdown are current-events factors not captured by structural model.</td>
+    </tr>
+    <!-- Philippines -->
+    <tr class="risk-low">
+      <td>
+        <div class="country-name">Philippines</div>
+        <div class="country-iso">PHL</div>
+        <span class="polity-tag polity-democracy">Polity +8 &middot; Democracy</span>
+      </td>
+      <td class="prob">1.0%</td>
+      <td class="prob">2.0%</td>
+      <td class="bar-cell">
+        <span class="risk-label">Low</span>
+        <div class="bar-track"><div class="bar-fill" style="width: 2%"></div></div>
+        <div class="components">Vuln 0.75 &middot; GPR +0.1</div>
+      </td>
+      <td class="factors">Only democracy in the set (Polity +8) -- no anocracy flag means PITF base rate is near floor. 4 years of stability further reduces risk. Marcos-Duterte fracture and SCS tensions are event-driven risks that Track B would capture.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="methodology">
+  <h2>Methodology: PITF Structural Model</h2>
+  <p>
+    Track A implements a logistic regression based on the Political Instability Task Force (PITF) model validated in
+    Goldstone et al. (2010). The PITF found that political instability onset can be predicted with over 80% accuracy
+    using just three structural variables: <strong>regime type</strong> (especially partial democracies with factionalized
+    politics), <strong>infant mortality rate</strong> (a proxy for state capacity and development), and
+    <strong>years since last instability event</strong>. These three variables outperformed models with dozens of predictors.
+  </p>
+  <p>The core logistic model for 30-day instability probability:</p>
+  <div class="formula">
+logit(P) = -6.5
+         + 1.8 &times; is_anocracy         (polity score in [-5, +5])
+         + 1.2 &times; is_factionalized     (polity score in [0, +5])
+         + 0.5 &times; ln(infant_mortality)  (deaths per 1,000 live births)
+         - 1.0 &times; stability_factor      (min(years_stable, 20) / 20)
+
+P(instability) = 1 / (1 + e^(-logit))
+  </div>
+  <p>
+    The base probability is then modified by three additional components drawn from Fearon &amp; Laitin (2003) and
+    PITF neighborhood contagion research:
+  </p>
+  <div class="formula">
+P(combined) = P(PITF) &times; (1 + 0.3 &times; structural_vulnerability
+                              + 0.2 &times; neighborhood_contagion
+                              + 0.1 &times; GPR_trend)
+  </div>
+  <p>
+    <strong>Structural vulnerability</strong> (Fearon-Laitin) combines GDP per capita, population size, terrain
+    ruggedness, and V-Dem liberal democracy index. <strong>Neighborhood contagion</strong> measures ACLED conflict
+    events in bordering countries over the past 90 days. <strong>GPR trend</strong> is the Caldara-Iacoviello
+    Geopolitical Risk Index direction for each country.
+  </p>
+  <p>
+    These probabilities are the <em>outside-view anchor</em> &mdash; the structural base rate before any adjustment
+    for current events. In the full system, Track B (LLM forecasting ensemble) adjusts from this anchor using
+    real-time news, ACLED data, and causal reasoning chains. The two tracks are fused with a configurable weight
+    (default 60% Track A / 40% Track B).
+  </p>
+  <p class="ref">
+    References: Goldstone, J. et al. (2010). "A Global Model for Forecasting Political Instability."
+    <em>American Journal of Political Science</em>, 54(1), 190-208.
+    &middot; Fearon, J. &amp; Laitin, D. (2003). "Ethnicity, Insurgency, and Civil War."
+    <em>American Political Science Review</em>, 97(1), 75-90.
+  </p>
+</div>
+
+<footer>
+  Track A Structural Model v1 &middot; Coefficients calibrated for 30-day prediction window &middot; Last updated 2026-04-06
+</footer>
+
+</body>
+</html>
