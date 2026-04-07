@@ -10,10 +10,11 @@ import urllib.parse
 from datetime import datetime, timedelta, timezone
 
 import feedparser
+import requests
 import trafilatura
 
 from config.settings import (
-    ACLED_API_BASE, ACLED_API_KEY, ACLED_EMAIL,
+    ACLED_API_BASE, ACLED_TOKEN_URL, ACLED_EMAIL, ACLED_PASSWORD,
     GDELT_API_BASE,
 )
 from utils.db import get_connection, insert_article
@@ -39,32 +40,79 @@ def fetch_full_text(url: str) -> str:
     return ""
 
 
+# --- ACLED OAuth Token Cache ---
+_acled_token_cache = {
+    "token": None,
+    "expires_at": 0.0,  # unix timestamp
+}
+
+
+def _get_acled_token() -> str:
+    """
+    Get a valid ACLED OAuth access token, refreshing if expired.
+    Tokens are valid for 24 hours; we refresh at 23 hours to be safe.
+    """
+    now = time.time()
+    if _acled_token_cache["token"] and now < _acled_token_cache["expires_at"]:
+        return _acled_token_cache["token"]
+
+    logger.info("Requesting new ACLED OAuth token...")
+    resp = requests.post(
+        ACLED_TOKEN_URL,
+        data={
+            "username": ACLED_EMAIL,
+            "password": ACLED_PASSWORD,
+            "grant_type": "password",
+            "client_id": "acled",
+        },
+        timeout=30,
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    token = data["access_token"]
+
+    # Cache with 23-hour expiry (actual is 24h)
+    _acled_token_cache["token"] = token
+    _acled_token_cache["expires_at"] = now + 23 * 3600
+
+    logger.info("ACLED OAuth token acquired (expires in 23h).")
+    return token
+
+
 def ingest_acled(country_iso3: str, days: int = 30) -> int:
     """
-    Fetch recent ACLED conflict events for a country.
+    Fetch recent ACLED conflict events for a country via OAuth API.
 
     Returns number of events ingested.
     """
-    if not ACLED_API_KEY or not ACLED_EMAIL:
-        logger.warning("ACLED API credentials not set. Skipping ACLED ingestion.")
+    if not ACLED_EMAIL or not ACLED_PASSWORD:
+        logger.warning("ACLED credentials not set. Skipping ACLED ingestion.")
+        return 0
+
+    try:
+        token = _get_acled_token()
+    except Exception as e:
+        logger.error("ACLED OAuth failed: %s", e)
         return 0
 
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    params = urllib.parse.urlencode({
-        "key": ACLED_API_KEY,
-        "email": ACLED_EMAIL,
+    params = {
         "iso": country_iso3,
         "event_date": f"{start_date}|",
         "event_date_where": ">=",
         "limit": 500,
-    })
-
-    url = f"{ACLED_API_BASE}?{params}"
+    }
 
     try:
-        raw = _http_get(url)
-        data = json.loads(raw)
+        resp = requests.get(
+            ACLED_API_BASE,
+            params=params,
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        data = resp.json()
     except Exception as e:
         logger.error("ACLED fetch failed for %s: %s", country_iso3, e)
         return 0
