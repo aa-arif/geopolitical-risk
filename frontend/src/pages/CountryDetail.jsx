@@ -11,62 +11,129 @@ const RISK_COLORS = {
   LOW: '#00e676',
 };
 
-function ReasoningChain({ chain }) {
-  const [expanded, setExpanded] = useState(false);
-  if (!chain) return null;
+function ExecutiveSummary({ text }) {
+  if (!text) return null;
+  return (
+    <div className="executive-summary" style={{
+      background: 'rgba(79, 195, 247, 0.08)',
+      border: '1px solid rgba(79, 195, 247, 0.2)',
+      borderRadius: '6px',
+      padding: '1rem 1.2rem',
+      marginBottom: '1.5rem',
+      lineHeight: '1.65',
+      fontSize: '0.92rem',
+    }}>
+      <strong style={{ color: '#4fc3f7', marginRight: '0.5rem' }}>EXECUTIVE SUMMARY</strong>
+      <span>{text}</span>
+    </div>
+  );
+}
 
-  const factors = Array.isArray(chain) ? chain : (chain.factors || chain.causal_factors || []);
-  if (factors.length === 0 && typeof chain === 'object' && !Array.isArray(chain)) {
-    return (
-      <div className="reasoning-chain">
-        <h4 className="section-label" onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
-          Reasoning Chain {expanded ? '[-]' : '[+]'}
-        </h4>
-        {expanded && (
-          <pre className="reasoning-raw mono">{JSON.stringify(chain, null, 2)}</pre>
-        )}
-      </div>
-    );
+function ReasoningChains({ chains, narrative }) {
+  const [expanded, setExpanded] = useState(true);
+
+  // Collect all causal factors and counterarguments from all chain objects
+  const allFactors = [];
+  const allCounterargs = [];
+
+  if (Array.isArray(chains)) {
+    for (const chain of chains) {
+      for (const f of (chain.causal_factors || [])) {
+        allFactors.push(f);
+      }
+      for (const c of (chain.counterarguments || [])) {
+        allCounterargs.push(c);
+      }
+    }
   }
+
+  if (allFactors.length === 0 && !narrative) return null;
 
   return (
     <div className="reasoning-chain">
       <h4 className="section-label" onClick={() => setExpanded(!expanded)} style={{ cursor: 'pointer' }}>
-        Reasoning Chain ({factors.length} factors) {expanded ? '[-]' : '[+]'}
+        Reasoning Chains ({allFactors.length} causal factors) {expanded ? '[-]' : '[+]'}
       </h4>
+
       {expanded && (
-        <ul className="factor-list">
-          {factors.map((f, i) => {
-            const label = typeof f === 'string' ? f : (f.factor || f.name || f.description || JSON.stringify(f));
-            const weight = typeof f === 'object' ? (f.weight || f.impact || f.score) : null;
-            return (
-              <li key={i} className="factor-item">
-                <span className="factor-label">{label}</span>
-                {weight != null && <span className="mono factor-weight">{typeof weight === 'number' ? weight.toFixed(2) : weight}</span>}
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {narrative && (
+            <div style={{ marginBottom: '1rem', padding: '0.8rem', background: 'rgba(255,255,255,0.03)', borderRadius: '4px' }}>
+              <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#6b7f99', marginBottom: '0.4rem', letterSpacing: '0.05em' }}>Supervisor Narrative</div>
+              <div style={{ fontSize: '0.85rem', lineHeight: '1.6' }}>{narrative}</div>
+            </div>
+          )}
+
+          {allFactors.length > 0 && (
+            <ul className="factor-list" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+              {allFactors.map((f, i) => {
+                const isRisk = f.direction === 'increases_risk';
+                const color = isRisk ? '#ff8c00' : '#00e676';
+                const symbol = isRisk ? '+' : '-';
+                return (
+                  <li key={i} className="factor-item" style={{
+                    padding: '0.6rem 0.8rem',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '0.25rem',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <span style={{
+                        color, fontFamily: "'JetBrains Mono', monospace",
+                        fontWeight: 700, fontSize: '0.85rem', minWidth: '18px',
+                      }}>[{symbol}]</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.88rem' }}>{f.factor}</span>
+                      <span className="mono" style={{ marginLeft: 'auto', color, fontSize: '0.8rem' }}>
+                        {typeof f.confidence === 'number' ? `${Math.round(f.confidence * 100)}%` : ''}
+                      </span>
+                    </div>
+                    {f.evidence && (
+                      <div style={{ fontSize: '0.78rem', color: '#8899aa', paddingLeft: '1.6rem', lineHeight: '1.5' }}>
+                        {f.evidence}
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+
+          {allCounterargs.length > 0 && (
+            <div style={{ marginTop: '1rem' }}>
+              <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#6b7f99', marginBottom: '0.4rem', letterSpacing: '0.05em' }}>Counterarguments</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {allCounterargs.map((c, i) => (
+                  <li key={i} style={{
+                    padding: '0.4rem 0.8rem',
+                    fontSize: '0.82rem',
+                    color: '#00e676',
+                    borderBottom: '1px solid rgba(255,255,255,0.03)',
+                  }}>
+                    - {typeof c === 'string' ? c : JSON.stringify(c)}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 }
 
-function TrackBreakdown({ detail }) {
-  const trackA = detail.track_a_components || detail.structural_vars || detail.track_a_detail || null;
-  if (!trackA) return null;
+function TrackBreakdown({ components }) {
+  if (!components || Object.keys(components).length === 0) return null;
 
-  const items = Array.isArray(trackA)
-    ? trackA
-    : Object.entries(trackA).map(([key, val]) => ({ name: key, value: val }));
+  const items = Object.entries(components).map(([key, val]) => ({ name: key, value: val }));
 
   return (
     <div className="track-breakdown">
       <h4 className="section-label">Track A Component Breakdown</h4>
       <div className="breakdown-grid">
         {items.map((item, i) => {
-          const name = item.name || item.variable || item.label || `Var ${i + 1}`;
-          const val = item.value ?? item.score ?? item.weight ?? '';
+          const name = item.name.replace(/_/g, ' ');
+          const val = item.value;
           const numVal = typeof val === 'number' ? val : parseFloat(val);
           return (
             <div key={i} className="breakdown-item">
@@ -84,38 +151,27 @@ function TrackBreakdown({ detail }) {
 
 function ACLEDSummary({ acled }) {
   if (!acled) return null;
-  const entries = Array.isArray(acled) ? acled : (acled.events || acled.summary || []);
 
-  if (typeof acled === 'object' && !Array.isArray(acled) && !acled.events && !acled.summary) {
+  if (typeof acled === 'object' && !Array.isArray(acled)) {
     return (
       <div className="acled-summary">
-        <h4 className="section-label">ACLED Event Data</h4>
+        <h4 className="section-label">ACLED Event Data (Last {acled.period_days || 30} Days)</h4>
         <div className="acled-stats">
-          {Object.entries(acled).map(([key, val]) => (
-            <div key={key} className="acled-stat">
-              <span className="label">{key.replace(/_/g, ' ')}</span>
-              <span className="mono">{typeof val === 'number' ? val.toLocaleString() : String(val)}</span>
-            </div>
-          ))}
+          {Object.entries(acled).map(([key, val]) => {
+            if (key === 'by_type') return null;
+            return (
+              <div key={key} className="acled-stat">
+                <span className="label">{key.replace(/_/g, ' ')}</span>
+                <span className="mono">{typeof val === 'number' ? val.toLocaleString() : String(val)}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="acled-summary">
-      <h4 className="section-label">ACLED Events ({entries.length})</h4>
-      <div className="acled-list">
-        {entries.slice(0, 10).map((ev, i) => (
-          <div key={i} className="acled-event">
-            <span className="mono acled-date">{ev.date || ev.event_date || ''}</span>
-            <span className="acled-type">{ev.type || ev.event_type || ev.sub_event_type || ''}</span>
-            <span className="acled-desc">{ev.description || ev.notes || ''}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
+  return null;
 }
 
 function KeyActors({ actors }) {
@@ -126,12 +182,10 @@ function KeyActors({ actors }) {
       <h4 className="section-label">Key Actors</h4>
       <div className="actors-list">
         {list.map((actor, i) => {
-          const name = typeof actor === 'string' ? actor : (actor.name || actor.actor || JSON.stringify(actor));
-          const role = typeof actor === 'object' ? (actor.role || actor.type || '') : '';
+          const name = typeof actor === 'string' ? actor : (actor.name || JSON.stringify(actor));
           return (
             <div key={i} className="actor-chip">
               <span className="actor-name">{name}</span>
-              {role && <span className="actor-role">{role}</span>}
             </div>
           );
         })}
@@ -149,7 +203,9 @@ export default function CountryDetail() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getCountryDetail(iso3), getCountryHistory(iso3)])
+    const detailPromise = getCountryDetail(iso3);
+    const historyPromise = getCountryHistory(iso3).catch(() => null);
+    Promise.all([detailPromise, historyPromise])
       .then(([d, h]) => {
         setDetail(d);
         setHistory(h);
@@ -162,8 +218,13 @@ export default function CountryDetail() {
   if (error) return <div className="error">Error: {error}</div>;
   if (!detail) return <div className="error">No data available</div>;
 
-  const riskColor = RISK_COLORS[detail.risk_level] || '#888';
-  const probability = detail.current_probability ?? detail.probability ?? 0;
+  // Read from correct nested paths
+  const pred = detail.current_prediction || {};
+  const reasoning = detail.reasoning || {};
+  const probability = pred.probability ?? 0;
+  const riskLevel = pred.risk_level || 'LOW';
+  const riskColor = RISK_COLORS[riskLevel] || '#888';
+  const confidence = reasoning.confidence || 'N/A';
 
   return (
     <div className="country-detail">
@@ -175,9 +236,11 @@ export default function CountryDetail() {
           <span className="detail-iso mono">{iso3}</span>
         </div>
         <span className="risk-badge large" style={{ background: riskColor }}>
-          {detail.risk_level}
+          {riskLevel}
         </span>
       </div>
+
+      <ExecutiveSummary text={reasoning.executive_summary} />
 
       <div className="detail-grid">
         <div className="detail-card gauge-card">
@@ -186,15 +249,15 @@ export default function CountryDetail() {
           <div className="gauge-tracks">
             <div className="gauge-track-item">
               <span className="label">Track A</span>
-              <span className="mono">{Math.round((detail.track_a ?? 0) * 100)}%</span>
+              <span className="mono">{Math.round((pred.track_a ?? 0) * 100)}%</span>
             </div>
             <div className="gauge-track-item">
               <span className="label">Track B</span>
-              <span className="mono">{Math.round((detail.track_b ?? 0) * 100)}%</span>
+              <span className="mono">{Math.round((pred.track_b ?? 0) * 100)}%</span>
             </div>
             <div className="gauge-track-item">
               <span className="label">Confidence</span>
-              <span className="mono">{Math.round((detail.confidence ?? 0) * 100)}%</span>
+              <span className="mono">{confidence}</span>
             </div>
           </div>
         </div>
@@ -211,19 +274,19 @@ export default function CountryDetail() {
 
       <div className="detail-sections">
         <div className="detail-card">
-          <TrackBreakdown detail={detail} />
+          <TrackBreakdown components={reasoning.track_a_components} />
         </div>
 
         <div className="detail-card">
-          <ReasoningChain chain={detail.reasoning_chain || detail.reasoning_chains || detail.reasoning} />
+          <ReasoningChains chains={detail.reasoning_chains} narrative={reasoning.narrative} />
         </div>
 
         <div className="detail-card">
-          <ACLEDSummary acled={detail.acled || detail.acled_data || detail.acled_summary} />
+          <ACLEDSummary acled={detail.acled_30d} />
         </div>
 
         <div className="detail-card">
-          <KeyActors actors={detail.key_actors || detail.actors} />
+          <KeyActors actors={detail.key_actors} />
         </div>
       </div>
     </div>

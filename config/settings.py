@@ -7,6 +7,9 @@ import os
 import json
 from pathlib import Path
 
+from dotenv import load_dotenv
+load_dotenv()
+
 # --- Paths ---
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"

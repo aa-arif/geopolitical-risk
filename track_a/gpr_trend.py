@@ -1,3 +1,8 @@
+# TODO: Replace with real Caldara-Iacoviello GPR Index data.
+# Currently returns hardcoded placeholder values.
+# Real data available at: https://www.matteoiacoviello.com/gpr.htm
+# Target: Summer 2026 build phase (Week 8-9)
+
 """
 Geopolitical Risk (GPR) Index trend analysis.
 

@@ -116,6 +116,8 @@ def initialize_db():
 
         CREATE INDEX IF NOT EXISTS idx_acled_country_date
             ON acled_events(country_iso3, event_date);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_acled_unique
+            ON acled_events(country_iso3, event_date, event_type, sub_event_type, latitude, longitude);
         CREATE INDEX IF NOT EXISTS idx_articles_country
             ON articles(country_iso3);
         CREATE INDEX IF NOT EXISTS idx_predictions_country

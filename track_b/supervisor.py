@@ -100,6 +100,9 @@ def reconcile(country_config: dict, track_a_result: dict,
     if "confidence" not in result:
         result["confidence"] = "medium"
 
+    if "executive_summary" not in result:
+        result["executive_summary"] = ""
+
     logger.info(
         "Supervisor reconciled %s: P(B)=%.3f (confidence=%s)",
         country_config["iso3"],

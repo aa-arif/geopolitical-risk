@@ -49,5 +49,6 @@ Return JSON:
   "narrative_summary": str,
   "key_risk_factors": [str],
   "key_stabilizing_factors": [str],
-  "confidence": "low" | "medium" | "high"
+  "confidence": "low" | "medium" | "high",
+  "executive_summary": "2-3 sentence plain-English summary suitable for a non-technical executive. State the risk level, the primary driver, and the key stabilizing factor. Example: 'Nigeria faces ELEVATED risk of instability (23%) over the next 30 days, driven primarily by escalating US-Nigeria military partnership backlash and ongoing Boko Haram activity. The key stabilizing factor is Tinubu's diplomatic management of the Trump relationship.'"
 }}

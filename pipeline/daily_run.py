@@ -142,6 +142,7 @@ def run_country(country_name: str) -> dict:
         "reasoning": {
             "track_a_components": track_a["components"],
             "supervisor": supervisor_result.get("narrative_summary", ""),
+            "executive_summary": supervisor_result.get("executive_summary", ""),
             "key_risk_factors": supervisor_result.get("key_risk_factors", []),
             "key_stabilizing_factors": supervisor_result.get("key_stabilizing_factors", []),
             "confidence": supervisor_result.get("confidence", "medium"),

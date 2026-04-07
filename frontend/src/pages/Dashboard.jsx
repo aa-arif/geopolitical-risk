@@ -29,10 +29,13 @@ function ProbabilityBar({ value }) {
 }
 
 function ConfidenceIndicator({ value }) {
+  // Confidence is a string ("low", "medium", "high") or null
+  const levelMap = { low: 1, medium: 3, high: 5 };
   const bars = 5;
-  const filled = Math.round(value * bars);
+  const filled = typeof value === 'string' ? (levelMap[value] || 0) : 0;
+  const label = typeof value === 'string' ? value : 'N/A';
   return (
-    <div className="confidence-indicator" title={`Confidence: ${Math.round(value * 100)}%`}>
+    <div className="confidence-indicator" title={`Confidence: ${label}`}>
       {Array.from({ length: bars }, (_, i) => (
         <div
           key={i}
@@ -57,17 +60,17 @@ function RiskCard({ country }) {
       <div className="risk-card-body">
         <div className="risk-card-row">
           <span className="label">Fused Probability</span>
-          <ProbabilityBar value={country.current_probability} />
+          <ProbabilityBar value={country.current_probability ?? 0} />
         </div>
 
         <div className="risk-card-tracks">
           <div className="track-item">
             <span className="label">Track A (structural)</span>
-            <span className="mono track-val">{Math.round(country.track_a * 100)}%</span>
+            <span className="mono track-val">{country.track_a != null ? Math.round(country.track_a * 100) + '%' : '--'}</span>
           </div>
           <div className="track-item">
             <span className="label">Track B (LLM)</span>
-            <span className="mono track-val">{Math.round(country.track_b * 100)}%</span>
+            <span className="mono track-val">{country.track_b != null ? Math.round(country.track_b * 100) + '%' : '--'}</span>
           </div>
         </div>
 

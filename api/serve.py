@@ -17,6 +17,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from config.settings import load_all_country_configs, COUNTRIES
+from track_a.predict import predict_track_a
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
     get_acled_summary, get_recent_reasoning_chains, get_resolved_predictions,
@@ -77,20 +78,31 @@ def list_countries():
             latest = history[0]
             prob = latest["calibrated_probability"]
             reasoning = json.loads(latest["reasoning_summary"]) if latest["reasoning_summary"] else {}
+            results.append({
+                "iso3": iso3,
+                "name": config["name"],
+                "current_probability": prob,
+                "track_a": latest["track_a_probability"],
+                "track_b": latest["track_b_probability"],
+                "confidence": reasoning.get("confidence"),
+                "prediction_date": latest["prediction_date"],
+                "risk_level": _risk_level(prob),
+            })
         else:
-            prob = None
-            reasoning = {}
-
-        results.append({
-            "iso3": iso3,
-            "name": config["name"],
-            "current_probability": prob,
-            "track_a": latest["track_a_probability"] if latest else None,
-            "track_b": latest["track_b_probability"] if latest else None,
-            "confidence": reasoning.get("confidence"),
-            "prediction_date": latest["prediction_date"] if latest else None,
-            "risk_level": _risk_level(prob) if prob else None,
-        })
+            # No prediction yet -- compute Track A structural probability
+            track_a_result = predict_track_a(config, conn)
+            track_a_prob = track_a_result["probability"]
+            results.append({
+                "iso3": iso3,
+                "name": config["name"],
+                "current_probability": track_a_prob,
+                "track_a": track_a_prob,
+                "track_b": None,
+                "confidence": None,
+                "prediction_date": None,
+                "risk_level": _risk_level(track_a_prob),
+                "track_a_only": True,
+            })
 
     conn.close()
     return {"countries": sorted(results, key=lambda x: x["current_probability"] or 0, reverse=True)}
@@ -145,6 +157,7 @@ def get_country(iso3: str):
         "reasoning": {
             "track_a_components": reasoning.get("track_a_components", {}),
             "narrative": reasoning.get("supervisor", ""),
+            "executive_summary": reasoning.get("executive_summary", ""),
             "key_risk_factors": reasoning.get("key_risk_factors", []),
             "key_stabilizing_factors": reasoning.get("key_stabilizing_factors", []),
             "confidence": reasoning.get("confidence"),
