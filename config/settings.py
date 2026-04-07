@@ -35,6 +35,7 @@ EXTREMIZING_PARAMETER = 1.0  # 1.0 = no extremizing; >1.0 = push away from 0.5
 PREDICTION_WINDOW_DAYS = 30
 ACLED_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
 NEIGHBORHOOD_LOOKBACK_DAYS = 90
+GPR_DATA_PATH = DATA_DIR / "gpr_daily.csv"
 
 # --- Countries ---
 COUNTRIES = ["nigeria", "bangladesh", "pakistan", "philippines", "turkey"]

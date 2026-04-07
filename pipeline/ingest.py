@@ -1,20 +1,22 @@
 """
 Data ingestion pipeline.
-Fetches data from ACLED, GDELT, RSS feeds, and World Bank APIs.
+Fetches data from ACLED, GDELT, RSS feeds (via feedparser + trafilatura).
 """
 
 import json
 import time
 import urllib.request
 import urllib.parse
-import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
+
+import feedparser
+import trafilatura
 
 from config.settings import (
     ACLED_API_BASE, ACLED_API_KEY, ACLED_EMAIL,
-    GDELT_API_BASE, WORLD_BANK_API_BASE,
+    GDELT_API_BASE,
 )
-from utils.db import get_connection
+from utils.db import get_connection, insert_article
 from utils.logger import logger
 
 
@@ -23,6 +25,18 @@ def _http_get(url: str, timeout: int = 30) -> str:
     req = urllib.request.Request(url, headers={"User-Agent": "GeoRisk/1.0"})
     with urllib.request.urlopen(req, timeout=timeout) as resp:
         return resp.read().decode("utf-8", errors="replace")
+
+
+def fetch_full_text(url: str) -> str:
+    """Fetch and extract full article text from a URL using trafilatura."""
+    try:
+        downloaded = trafilatura.fetch_url(url)
+        if downloaded:
+            text = trafilatura.extract(downloaded)
+            return text or ""
+    except Exception as e:
+        logger.warning("Failed to fetch full text from %s: %s", url, e)
+    return ""
 
 
 def ingest_acled(country_iso3: str, days: int = 30) -> int:
@@ -93,7 +107,8 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
 
 def ingest_rss(country_config: dict) -> int:
     """
-    Fetch articles from RSS feeds for a country.
+    Fetch articles from RSS feeds using feedparser.
+    Extracts full article text via trafilatura.
 
     Returns number of articles ingested.
     """
@@ -101,42 +116,22 @@ def ingest_rss(country_config: dict) -> int:
     if not feeds:
         return 0
 
+    iso3 = country_config["iso3"]
     conn = get_connection()
     total = 0
 
     for feed_url in feeds:
         try:
-            raw = _http_get(feed_url, timeout=15)
-            root = ET.fromstring(raw)
+            feed = feedparser.parse(feed_url)
         except Exception as e:
             logger.warning("RSS fetch failed for %s: %s", feed_url, e)
             continue
 
-        # Handle both RSS and Atom formats
-        items = root.findall(".//item") or root.findall(
-            ".//{http://www.w3.org/2005/Atom}entry"
-        )
-
-        for item in items[:20]:  # Limit per feed
-            title = _get_text(item, "title") or _get_text(
-                item, "{http://www.w3.org/2005/Atom}title"
-            )
-            link = _get_text(item, "link") or ""
-            if not link:
-                link_el = item.find("{http://www.w3.org/2005/Atom}link")
-                if link_el is not None:
-                    link = link_el.get("href", "")
-
-            description = (
-                _get_text(item, "description")
-                or _get_text(item, "{http://www.w3.org/2005/Atom}summary")
-                or ""
-            )
-            pub_date = (
-                _get_text(item, "pubDate")
-                or _get_text(item, "{http://www.w3.org/2005/Atom}published")
-                or ""
-            )
+        for entry in feed.entries[:20]:
+            title = entry.get("title", "")
+            link = entry.get("link", "")
+            published = entry.get("published", "")
+            description = entry.get("summary", "")
 
             if not title:
                 continue
@@ -148,19 +143,18 @@ def ingest_rss(country_config: dict) -> int:
             if existing:
                 continue
 
+            # Fetch full text; fall back to RSS description
+            full_text = ""
+            if link:
+                full_text = fetch_full_text(link)
+                time.sleep(2)  # Be polite to servers
+            if not full_text:
+                full_text = description
+
             try:
-                conn.execute(
-                    """INSERT INTO articles
-                       (country_iso3, title, source, url, published_date, full_text)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (
-                        country_config["iso3"],
-                        title[:500],
-                        feed_url,
-                        link[:1000],
-                        pub_date[:100],
-                        description[:5000],
-                    ),
+                insert_article(
+                    conn, iso3, title[:500], feed_url,
+                    link[:1000], published[:100], full_text[:50000],
                 )
                 total += 1
             except Exception as e:
@@ -168,7 +162,7 @@ def ingest_rss(country_config: dict) -> int:
 
     conn.commit()
     conn.close()
-    logger.info("Ingested %d RSS articles for %s.", total, country_config["iso3"])
+    logger.info("Ingested %d RSS articles for %s.", total, iso3)
     return total
 
 
@@ -244,11 +238,3 @@ def ingest_all(country_config: dict) -> dict:
         "rss": ingest_rss(country_config),
         "gdelt": ingest_gdelt(iso3),
     }
-
-
-def _get_text(element, tag: str) -> str:
-    """Safely get text content from an XML element."""
-    child = element.find(tag)
-    if child is not None and child.text:
-        return child.text.strip()
-    return ""

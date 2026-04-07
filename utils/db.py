@@ -228,3 +228,44 @@ def get_resolved_predictions(conn, country_iso3: str = None) -> list:
                ORDER BY prediction_date"""
         )
     return [dict(row) for row in cursor.fetchall()]
+
+
+def compute_event_threshold(conn, country_iso3: str, months: int = 12) -> float:
+    """
+    Compute the 90th percentile of monthly ACLED event counts.
+    Returns the threshold count above which a month is considered 'instability'.
+    """
+    cursor = conn.execute(
+        """SELECT strftime('%Y-%m', event_date) as month, COUNT(*) as cnt
+           FROM acled_events
+           WHERE country_iso3 = ?
+           AND event_date >= date('now', ? || ' months')
+           GROUP BY month
+           ORDER BY month""",
+        (country_iso3, f"-{months}")
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return 0.0
+
+    import numpy as np
+    counts = [r["cnt"] for r in rows]
+    return float(np.percentile(counts, 90))
+
+
+def get_latest_event_date(conn, country_iso3: str) -> str:
+    """Get the most recent ACLED event date for a country."""
+    row = conn.execute(
+        "SELECT MAX(event_date) as d FROM acled_events WHERE country_iso3 = ?",
+        (country_iso3,)
+    ).fetchone()
+    return row["d"] or "" if row else ""
+
+
+def get_latest_article_id(conn, country_iso3: str) -> int:
+    """Get the most recent article ID for a country."""
+    row = conn.execute(
+        "SELECT MAX(id) as mid FROM articles WHERE country_iso3 = ?",
+        (country_iso3,)
+    ).fetchone()
+    return row["mid"] or 0 if row else 0

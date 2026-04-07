@@ -18,7 +18,8 @@ from utils.api_client import MODELS
 from utils.logger import logger, compute_data_hash, log_prediction
 
 from track_a.predict import predict_track_a
-from track_b.extraction import extract_reasoning, summarize_reasoning_chains
+from utils.db import insert_article, get_latest_event_date, get_latest_article_id
+from track_b.extraction import extract_and_store, summarize_reasoning_chains
 from track_b.forecasting import run_ensemble
 from track_b.supervisor import reconcile
 from fusion.blend import fuse
@@ -51,12 +52,20 @@ def main():
     with open("data/articles/test_nigeria_aljazeera.txt", "r") as f:
         article_text = f.read()
 
-    # Re-run extraction to get fresh chain (we already tested this works)
-    print("  Running extraction on Al Jazeera article...")
-    extraction = extract_reasoning(article_text, country_config)
+    # Insert article into DB and extract with storage
+    print("  Inserting article and running extraction...")
+    article_id = insert_article(
+        conn, iso3,
+        "Holding hands: How Nigeria turned Trump threats to military partnership",
+        "Al Jazeera",
+        "https://www.aljazeera.com/news/2026/2/19/from-us-threats-to-holding-hands",
+        "2026-02-19",
+        article_text,
+    )
+    extraction = extract_and_store(article_id, article_text, country_config, conn)
     n_factors = len(extraction.get("causal_factors", []))
     n_counter = len(extraction.get("counterarguments", []))
-    print(f"  Extracted {n_factors} causal factors, {n_counter} counterarguments")
+    print(f"  Stored article id={article_id}, extracted {n_factors} factors, {n_counter} counterarguments")
 
     # Build reasoning summary for forecasting agents
     chains = [extraction]
@@ -132,7 +141,11 @@ def main():
         },
         "prompt_versions": PROMPT_VERSIONS,
         "model_versions": MODELS,
-        "data_hash": compute_data_hash(iso3, 0, 1),
+        "data_hash": compute_data_hash(
+            iso3, 0, 1,
+            get_latest_event_date(conn, iso3),
+            get_latest_article_id(conn, iso3),
+        ),
     }
     log_prediction(conn, prediction_data)
     conn.close()

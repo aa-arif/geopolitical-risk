@@ -19,18 +19,20 @@ def compute_neighborhood_risk(country_iso3: str, neighbors: list,
     if not neighbors:
         return 0.0
 
-    # Count conflict events in neighboring countries
+    # Build parameterized query (no f-string interpolation for user values)
     placeholders = ",".join(["?" for _ in neighbors])
+    date_offset = f"-{int(lookback_days)} days"
     query = f"""
         SELECT country_iso3, COUNT(*) as event_count
         FROM acled_events
         WHERE country_iso3 IN ({placeholders})
-        AND event_date >= date('now', '-{lookback_days} days')
+        AND event_date >= date('now', ?)
         AND event_type IN ('Battles', 'Violence against civilians',
                            'Explosions/Remote violence')
         GROUP BY country_iso3
     """
-    cursor = db_conn.execute(query, neighbors)
+    params = list(neighbors) + [date_offset]
+    cursor = db_conn.execute(query, params)
     results = cursor.fetchall()
 
     if not results:

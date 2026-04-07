@@ -18,10 +18,12 @@ logger = logging.getLogger("georisk")
 
 
 def compute_data_hash(country_iso3: str, acled_count: int,
-                      article_count: int) -> str:
+                      article_count: int, latest_event_date: str = "",
+                      latest_article_id: int = 0) -> str:
     """Compute a hash of the data state at prediction time."""
     data_str = (
         f"{country_iso3}:{acled_count}:{article_count}:"
+        f"{latest_event_date}:{latest_article_id}:"
         f"{datetime.now(timezone.utc).date()}"
     )
     return hashlib.sha256(data_str.encode()).hexdigest()[:16]

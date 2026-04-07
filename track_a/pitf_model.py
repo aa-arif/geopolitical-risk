@@ -4,21 +4,39 @@ PITF-validated logistic regression for political instability prediction.
 Based on: Goldstone et al. (2010), "A Global Model for Forecasting
 Political Instability," American Journal of Political Science, 54(1).
 
-Uses three predictors:
-1. Polity code (regime type, especially factionalism)
+Coefficients fitted on synthetic data generated from published PITF
+relationships (see fit_pitf.py). Uses three predictors:
+1. Regime type (anocracy and factionalism indicators)
 2. Log(infant mortality rate)
 3. Years since last instability event
 
-Achieves 80%+ accuracy on historical data per PITF research.
+Outputs 30-day instability onset probability.
 """
 
 import numpy as np
+
+# Coefficients fitted by track_a/fit_pitf.py on 2000 synthetic observations
+# generated from PITF published findings (Goldstone et al. 2010).
+# Model: LogisticRegression(C=1.0), accuracy=0.929, base rate=0.071
+#
+# Feature                     Coefficient
+# -----------------------------------------
+# intercept                   -4.7260
+# is_anocracy                  1.7648
+# is_factionalized             0.8849
+# log_infant_mortality         0.2468
+# stability_factor            -1.1364
+INTERCEPT = -4.7260
+COEF_ANOCRACY = 1.7648
+COEF_FACTIONALIZED = 0.8849
+COEF_LOG_IM = 0.2468
+COEF_STABILITY = -1.1364
 
 
 def compute_pitf_probability(polity_code: int, infant_mortality: float,
                               years_stability: int) -> float:
     """
-    Compute instability probability from PITF structural variables.
+    Compute 30-day instability probability from PITF structural variables.
 
     Args:
         polity_code: Polity V score (-10 to +10)
@@ -26,30 +44,19 @@ def compute_pitf_probability(polity_code: int, infant_mortality: float,
         years_stability: Years since last instability event
 
     Returns:
-        Probability of instability (0.0 to 1.0)
+        30-day probability of instability onset (0.01 to 0.99)
     """
-    # Factionalism is the key risk factor per PITF
-    # Partial democracies (anocracies, -5 to +5) are highest risk
-    # Factionalized partial democracies are up to 30x more vulnerable
     is_anocracy = 1.0 if -5 <= polity_code <= 5 else 0.0
     is_factionalized = 1.0 if 0 <= polity_code <= 5 else 0.0
-
     log_infant_mort = np.log(max(infant_mortality, 1.0))
-
-    # Years of stability reduces risk (but not linearly - long stability
-    # can mask underlying fragility, per PITF findings)
     stability_factor = min(years_stability, 20) / 20.0
 
-    # Logistic model (coefficients calibrated for 30-day window)
-    # PITF annual model predicts ~10-15% for highest-risk countries/year
-    # 30-day window: divide annual risk roughly by 12, then adjust
-    # Intercept set low to produce sensible 30-day probabilities
     logit = (
-        -6.5                           # intercept (low 30-day base rate)
-        + 1.8 * is_anocracy            # partial democracy risk
-        + 1.2 * is_factionalized       # factionalism amplifier
-        + 0.5 * log_infant_mort        # development proxy
-        - 1.0 * stability_factor       # stability discount
+        INTERCEPT
+        + COEF_ANOCRACY * is_anocracy
+        + COEF_FACTIONALIZED * is_factionalized
+        + COEF_LOG_IM * log_infant_mort
+        + COEF_STABILITY * stability_factor
     )
 
     probability = 1.0 / (1.0 + np.exp(-logit))

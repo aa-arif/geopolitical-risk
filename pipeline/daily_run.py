@@ -24,6 +24,7 @@ from config.settings import (
 from utils.db import (
     get_connection, initialize_db, get_recent_articles,
     get_recent_reasoning_chains, get_acled_summary,
+    get_latest_event_date, get_latest_article_id,
 )
 from utils.logger import logger, compute_data_hash, log_prediction
 from utils.api_client import MODELS
@@ -39,6 +40,7 @@ from fusion.blend import fuse
 from fusion.extremize import extremize
 from fusion.calibrate import calibrate
 from evaluation.brier import brier_score
+from evaluation.resolve import resolve_expired_predictions
 
 
 def run_country(country_name: str) -> dict:
@@ -150,7 +152,9 @@ def run_country(country_name: str) -> dict:
         "prompt_versions": PROMPT_VERSIONS,
         "model_versions": MODELS,
         "data_hash": compute_data_hash(
-            iso3, acled_data["total_events"], len(articles)
+            iso3, acled_data["total_events"], len(articles),
+            get_latest_event_date(conn, iso3),
+            get_latest_article_id(conn, iso3),
         ),
     }
     log_prediction(conn, prediction_data)
@@ -163,7 +167,7 @@ def run_country(country_name: str) -> dict:
                         iso3, contradiction["explanation"])
 
     # --- Evaluate resolved windows ---
-    _evaluate_resolved(conn, iso3)
+    resolve_expired_predictions(conn, iso3)
 
     conn.close()
     logger.info("Pipeline complete for %s. Final P=%.3f", iso3, calibrated_prob)
@@ -175,21 +179,6 @@ def run_country(country_name: str) -> dict:
         "track_b": track_b_prob,
         "confidence": supervisor_result.get("confidence", "medium"),
     }
-
-
-def _evaluate_resolved(conn, country_iso3: str):
-    """Check and score any prediction windows that have closed."""
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    cursor = conn.execute(
-        """SELECT id, calibrated_probability FROM predictions
-           WHERE country_iso3 = ? AND resolved = FALSE
-           AND window_end_date <= ?""",
-        (country_iso3, now),
-    )
-    expired = cursor.fetchall()
-    if expired:
-        logger.info("%d prediction windows expired for %s (need manual resolution).",
-                    len(expired), country_iso3)
 
 
 def run_all():
