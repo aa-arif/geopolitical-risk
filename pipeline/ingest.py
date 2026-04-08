@@ -79,6 +79,16 @@ def _get_acled_token() -> str:
     return token
 
 
+# ACLED API uses full country names, not ISO3 codes
+_ISO3_TO_COUNTRY_NAME = {
+    "NGA": "Nigeria",
+    "BGD": "Bangladesh",
+    "PAK": "Pakistan",
+    "PHL": "Philippines",
+    "TUR": "Turkey",
+}
+
+
 def ingest_acled(country_iso3: str, days: int = 30) -> int:
     """
     Fetch recent ACLED conflict events for a country via OAuth API.
@@ -87,6 +97,11 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
     """
     if not ACLED_EMAIL or not ACLED_PASSWORD:
         logger.warning("ACLED credentials not set. Skipping ACLED ingestion.")
+        return 0
+
+    country_name = _ISO3_TO_COUNTRY_NAME.get(country_iso3)
+    if not country_name:
+        logger.error("No ACLED country name mapping for %s", country_iso3)
         return 0
 
     try:
@@ -98,10 +113,10 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
     params = {
-        "iso": country_iso3,
+        "country": country_name,
         "event_date": f"{start_date}|",
         "event_date_where": ">=",
-        "limit": 500,
+        "limit": 2000,
     }
 
     try:
