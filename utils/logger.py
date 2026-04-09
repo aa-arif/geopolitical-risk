@@ -29,16 +29,16 @@ def compute_data_hash(country_iso3: str, acled_count: int,
     return hashlib.sha256(data_str.encode()).hexdigest()[:16]
 
 
-def log_prediction(db_conn, prediction_data: dict):
-    """Log a complete prediction with all metadata."""
-    db_conn.execute(
+def log_prediction(db_conn, prediction_data: dict) -> int:
+    """Log a complete prediction with all metadata. Returns prediction ID."""
+    cursor = db_conn.execute(
         """INSERT INTO predictions
         (country_iso3, prediction_date, window_end_date,
          track_a_probability, track_b_probability, fused_probability,
          extremized_probability, calibrated_probability,
          reasoning_summary, prompt_versions_json, model_versions_json,
-         data_snapshot_hash)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+         data_snapshot_hash, event_threshold)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             prediction_data["country_iso3"],
             prediction_data["prediction_date"],
@@ -52,14 +52,18 @@ def log_prediction(db_conn, prediction_data: dict):
             json.dumps(prediction_data["prompt_versions"]),
             json.dumps(prediction_data["model_versions"]),
             prediction_data["data_hash"],
+            prediction_data.get("event_threshold"),
         ),
     )
     db_conn.commit()
+    prediction_id = cursor.lastrowid
     logger.info(
-        "Prediction logged: %s P=%.3f (A=%.3f, B=%.3f, fused=%.3f)",
+        "Prediction logged (id=%d): %s P=%.3f (A=%.3f, B=%.3f, fused=%.3f)",
+        prediction_id,
         prediction_data["country_iso3"],
         prediction_data["calibrated"],
         prediction_data["track_a"],
         prediction_data["track_b"],
         prediction_data["fused"],
     )
+    return prediction_id

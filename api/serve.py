@@ -21,6 +21,7 @@ from track_a.predict import predict_track_a
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
     get_acled_summary, get_recent_reasoning_chains, get_resolved_predictions,
+    get_agent_outputs,
 )
 from evaluation.track_comparison import compare_tracks
 from evaluation.calibration_curve import compute_calibration_curve
@@ -138,6 +139,17 @@ def get_country(iso3: str):
         except (json.JSONDecodeError, KeyError):
             pass
 
+    # Agent outputs for the latest prediction
+    agent_data = []
+    if latest:
+        agent_rows = get_agent_outputs(conn, latest["id"])
+        for row in agent_rows:
+            agent_data.append({
+                "agent_type": row["agent_type"],
+                "probability": row["probability"],
+                "reasoning": json.loads(row["reasoning_json"]) if row.get("reasoning_json") else {},
+            })
+
     conn.close()
 
     return {
@@ -164,6 +176,7 @@ def get_country(iso3: str):
         },
         "acled_30d": acled,
         "reasoning_chains": chain_data,
+        "agent_outputs": agent_data,
         "structural_variables": {
             "polity_code": config["polity_code"],
             "polity_category": config["polity_category"],

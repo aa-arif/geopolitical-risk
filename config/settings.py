@@ -21,6 +21,7 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ACLED_EMAIL = os.environ.get("ACLED_EMAIL", "")
 ACLED_PASSWORD = os.environ.get("ACLED_PASSWORD", "")
+NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 
 # --- LLM Model Versions (pinned for reproducibility) ---
 MODEL_SONNET = "claude-sonnet-4-20250514"

@@ -1,6 +1,6 @@
 # Download GPR data from: https://www.matteoiacoviello.com/gpr.htm
-# Save the daily country-level CSV as: data/gpr_daily.csv
-# Columns: date, GPRC_BRA, GPRC_CHN, ... GPRC_NGA, GPRC_PAK, GPRC_PHL, GPRC_TUR, ...
+# Save the monthly Excel file as: data/gpr_monthly.xlsx
+# The file contains country-specific GPR columns (GPRC_XXX format).
 
 """
 Geopolitical Risk (GPR) Index trend analysis.
@@ -8,27 +8,26 @@ Geopolitical Risk (GPR) Index trend analysis.
 The GPR Index is maintained by Caldara & Iacoviello (Federal Reserve Board).
 It measures geopolitical risk based on newspaper articles.
 
-When real GPR data is available (data/gpr_daily.csv), computes a 3-month
+When real GPR data is available (data/gpr_monthly.xlsx), computes a 3-month
 trend score. Otherwise falls back to manually curated placeholder values.
 """
 
-import os
 from pathlib import Path
 
 from utils.logger import logger
 
-_GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "gpr_daily.csv"
+_GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "gpr_monthly.xlsx"
 
-# ISO3 -> GPR column name mapping
-_ISO3_TO_GPR_COLUMN = {
-    "NGA": "GPRC_NGA",
-    "BGD": "GPRC_BGD",
-    "PAK": "GPRC_PAK",
-    "PHL": "GPRC_PHL",
-    "TUR": "GPRC_TUR",
+# ISO3 -> possible GPR column name patterns (will be matched flexibly)
+_ISO3_TO_GPR_PATTERNS = {
+    "NGA": ["GPRC_NGA", "GPRC_Nigeria", "Nigeria"],
+    "BGD": ["GPRC_BGD", "GPRC_Bangladesh", "Bangladesh"],
+    "PAK": ["GPRC_PAK", "GPRC_Pakistan", "Pakistan"],
+    "PHL": ["GPRC_PHL", "GPRC_Philippines", "Philippines"],
+    "TUR": ["GPRC_TUR", "GPRC_Turkey", "Turkey"],
 }
 
-# Placeholder values used when CSV is unavailable.
+# Placeholder values used when Excel is unavailable.
 # Scale: -1.0 (declining risk) to +1.0 (rising risk), 0.0 = stable
 _FALLBACK_TRENDS = {
     "NGA": 0.3,   # Elevated due to security situation, US tensions
@@ -38,13 +37,23 @@ _FALLBACK_TRENDS = {
     "TUR": 0.4,   # Imamoglu arrest, opposition crackdown
 }
 
-# Cache for loaded GPR data
+# Cache for loaded GPR data: {iso3: [(datetime, value), ...]}
 _gpr_cache = None
+_gpr_columns_found = None
+
+
+def _find_column(columns, patterns):
+    """Find the matching column name from a list of patterns."""
+    for pattern in patterns:
+        for col in columns:
+            if pattern.lower() == col.lower() or pattern.lower() in col.lower():
+                return col
+    return None
 
 
 def _load_gpr_data():
-    """Load GPR CSV data into memory. Returns dict of {column: [(date, value)]}."""
-    global _gpr_cache
+    """Load GPR Excel data into memory using pandas."""
+    global _gpr_cache, _gpr_columns_found
     if _gpr_cache is not None:
         return _gpr_cache
 
@@ -58,42 +67,45 @@ def _load_gpr_data():
         return _gpr_cache
 
     try:
-        import csv
-        from datetime import datetime
+        import pandas as pd
 
+        df = pd.read_excel(_GPR_DATA_PATH)
+        logger.info("GPR Excel loaded: %d rows, %d columns", len(df), len(df.columns))
+        logger.info("GPR columns: %s", list(df.columns))
+
+        # Find the date column
+        date_col = None
+        for candidate in ["date", "Date", "DATE", "Month", "month", "MONTH"]:
+            if candidate in df.columns:
+                date_col = candidate
+                break
+        if date_col is None:
+            # Try first column
+            date_col = df.columns[0]
+            logger.info("Using first column as date: %s", date_col)
+
+        df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+        df = df.dropna(subset=[date_col]).sort_values(date_col)
+
+        # Build per-country series
         data = {}
-        with open(_GPR_DATA_PATH, "r") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                date_str = row.get("date", "")
-                try:
-                    dt = datetime.strptime(date_str.strip(), "%Y-%m-%d")
-                except ValueError:
-                    try:
-                        dt = datetime.strptime(date_str.strip(), "%m/%d/%Y")
-                    except ValueError:
-                        continue
+        _gpr_columns_found = {}
+        for iso3, patterns in _ISO3_TO_GPR_PATTERNS.items():
+            col = _find_column(df.columns.tolist(), patterns)
+            if col:
+                series = df[[date_col, col]].dropna()
+                data[iso3] = list(zip(series[date_col].tolist(),
+                                       series[col].astype(float).tolist()))
+                _gpr_columns_found[iso3] = col
+                logger.info("GPR: %s -> column '%s' (%d data points)", iso3, col, len(data[iso3]))
+            else:
+                logger.warning("GPR: No column found for %s (tried %s)", iso3, patterns)
 
-                for col, val in row.items():
-                    if col.startswith("GPRC_") and val:
-                        try:
-                            fval = float(val)
-                        except ValueError:
-                            continue
-                        if col not in data:
-                            data[col] = []
-                        data[col].append((dt, fval))
-
-        # Sort each series by date
-        for col in data:
-            data[col].sort(key=lambda x: x[0])
-
-        logger.info("Loaded GPR data: %d columns, latest entries available.", len(data))
         _gpr_cache = data
         return _gpr_cache
 
     except Exception as e:
-        logger.warning("Failed to load GPR data: %s. Using placeholders.", e)
+        logger.warning("Failed to load GPR Excel: %s. Using placeholders.", e)
         _gpr_cache = {}
         return _gpr_cache
 
@@ -102,13 +114,13 @@ def _compute_trend_from_data(series, lookback_months=3):
     """
     Compute GPR trend from time series data.
 
-    Compares the most recent month's average to the average from
+    Compares the most recent month's value to the average from
     lookback_months ago. Returns normalized score:
       0.0 = sharply declining risk narrative
       0.5 = stable
       1.0 = sharply rising risk narrative
     """
-    if len(series) < 60:  # Need at least ~2 months of daily data
+    if len(series) < lookback_months + 1:
         return None
 
     from datetime import timedelta
@@ -132,7 +144,6 @@ def _compute_trend_from_data(series, lookback_months=3):
 
     # Percent change, clamped and normalized to 0-1
     pct_change = (recent_avg - past_avg) / past_avg
-    # Clamp to [-1, 1] and map to [0, 1]
     normalized = max(-1.0, min(1.0, pct_change)) * 0.5 + 0.5
 
     return normalized
@@ -142,16 +153,14 @@ def get_gpr_trend(country_iso3: str) -> float:
     """
     Get the GPR trend score for a country.
 
-    Returns: trend score from -1.0 (declining risk) to +1.0 (rising risk)
-    on the legacy scale. Internally uses 0-1 if real data is available.
+    Returns: trend score from -1.0 (declining risk) to +1.0 (rising risk).
     """
     gpr_data = _load_gpr_data()
 
-    col = _ISO3_TO_GPR_COLUMN.get(country_iso3)
-    if col and col in gpr_data:
-        trend = _compute_trend_from_data(gpr_data[col])
+    if country_iso3 in gpr_data and gpr_data[country_iso3]:
+        trend = _compute_trend_from_data(gpr_data[country_iso3])
         if trend is not None:
-            # Convert 0-1 normalized score back to -1 to +1 legacy scale
+            # Convert 0-1 normalized score to -1 to +1 legacy scale
             return (trend - 0.5) * 2.0
 
     return _FALLBACK_TRENDS.get(country_iso3, 0.0)

@@ -93,9 +93,20 @@ def initialize_db():
             prompt_versions_json TEXT,
             model_versions_json TEXT,
             data_snapshot_hash TEXT,
+            event_threshold REAL DEFAULT NULL,
             resolved BOOLEAN DEFAULT FALSE,
             actual_outcome INTEGER DEFAULT NULL,
             brier_score REAL DEFAULT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS agent_outputs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            prediction_id INTEGER REFERENCES predictions(id),
+            country_iso3 TEXT NOT NULL,
+            agent_type TEXT NOT NULL,
+            probability REAL,
+            reasoning_json TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -269,3 +280,34 @@ def get_latest_article_id(conn, country_iso3: str) -> int:
         (country_iso3,)
     ).fetchone()
     return row["mid"] or 0 if row else 0
+
+
+def insert_agent_outputs(conn, prediction_id: int, country_iso3: str,
+                         ensemble_results: list):
+    """Store individual agent outputs for a prediction."""
+    import json
+    for result in ensemble_results:
+        agent_type = result.get("agent_type", "unknown")
+        probability = result.get("final_probability", 0.0)
+        # Store full result minus _meta for reasoning
+        reasoning = {k: v for k, v in result.items()
+                     if k not in ("_meta", "agent_type", "final_probability")}
+        conn.execute(
+            """INSERT INTO agent_outputs
+               (prediction_id, country_iso3, agent_type, probability, reasoning_json)
+               VALUES (?, ?, ?, ?, ?)""",
+            (prediction_id, country_iso3, agent_type, probability,
+             json.dumps(reasoning, default=str)),
+        )
+    conn.commit()
+
+
+def get_agent_outputs(conn, prediction_id: int) -> list:
+    """Get agent outputs for a specific prediction."""
+    cursor = conn.execute(
+        """SELECT agent_type, probability, reasoning_json
+           FROM agent_outputs WHERE prediction_id = ?
+           ORDER BY id""",
+        (prediction_id,),
+    )
+    return [dict(row) for row in cursor.fetchall()]

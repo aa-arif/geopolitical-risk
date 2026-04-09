@@ -25,6 +25,7 @@ from utils.db import (
     get_connection, initialize_db, get_recent_articles,
     get_recent_reasoning_chains, get_acled_summary,
     get_latest_event_date, get_latest_article_id,
+    compute_event_threshold, insert_agent_outputs,
 )
 from utils.logger import logger, compute_data_hash, log_prediction
 from utils.api_client import MODELS
@@ -60,8 +61,13 @@ def run_country(country_name: str) -> dict:
     # --- Step 1: Ingest ---
     logger.info("[1/8] Ingesting data for %s...", iso3)
     ingest_counts = ingest_all(country_config)
-    logger.info("Ingestion: ACLED=%d, RSS=%d, GDELT=%d",
-                ingest_counts["acled"], ingest_counts["rss"], ingest_counts["gdelt"])
+    logger.info("Ingestion: ACLED=%d, NewsAPI=%d, RSS=%d, GDELT=%d",
+                ingest_counts["acled"], ingest_counts.get("newsapi", 0),
+                ingest_counts.get("rss", 0), ingest_counts["gdelt"])
+
+    # --- Compute event threshold ---
+    event_threshold = compute_event_threshold(conn, iso3, months=12)
+    logger.info("Event threshold (90th pct) for %s: %.0f events/month", iso3, event_threshold)
 
     # --- Step 2: Track A ---
     logger.info("[2/8] Running Track A (structural model)...")
@@ -156,8 +162,12 @@ def run_country(country_name: str) -> dict:
             get_latest_event_date(conn, iso3),
             get_latest_article_id(conn, iso3),
         ),
+        "event_threshold": event_threshold,
     }
-    log_prediction(conn, prediction_data)
+    prediction_id = log_prediction(conn, prediction_data)
+
+    # Store individual agent outputs
+    insert_agent_outputs(conn, prediction_id, iso3, ensemble_results)
 
     # --- Step 8: Contradiction Check ---
     logger.info("[8/8] Running contradiction check...")

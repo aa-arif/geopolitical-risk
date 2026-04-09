@@ -1,6 +1,6 @@
 """
 Data ingestion pipeline.
-Fetches data from ACLED, GDELT, RSS feeds (via feedparser + trafilatura).
+Fetches data from ACLED (OAuth), NewsAPI, GDELT, RSS feeds (feedparser + trafilatura).
 """
 
 import json
@@ -15,7 +15,7 @@ import trafilatura
 
 from config.settings import (
     ACLED_API_BASE, ACLED_TOKEN_URL, ACLED_EMAIL, ACLED_PASSWORD,
-    GDELT_API_BASE,
+    GDELT_API_BASE, NEWSAPI_KEY,
 )
 from utils.db import get_connection, insert_article
 from utils.logger import logger
@@ -112,34 +112,54 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
 
     start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
-    params = {
-        "country": country_name,
-        "event_date": f"{start_date}|",
-        "event_date_where": ">=",
-        "limit": 2000,
-    }
+    # Paginated fetch -- ACLED caps at 5000 per request
+    PAGE_SIZE = 5000
+    MAX_EVENTS = 20000
+    all_events = []
+    page = 1
 
-    try:
-        resp = requests.get(
-            ACLED_API_BASE,
-            params=params,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=60,
-        )
-        resp.raise_for_status()
-        data = resp.json()
-    except Exception as e:
-        logger.error("ACLED fetch failed for %s: %s", country_iso3, e)
-        return 0
+    while len(all_events) < MAX_EVENTS:
+        params = {
+            "country": country_name,
+            "event_date": f"{start_date}|",
+            "event_date_where": ">=",
+            "limit": PAGE_SIZE,
+            "page": page,
+        }
+        try:
+            resp = requests.get(
+                ACLED_API_BASE,
+                params=params,
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=120,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except Exception as e:
+            logger.error("ACLED fetch failed for %s (page %d): %s", country_iso3, page, e)
+            break
 
-    events = data.get("data", [])
-    if not events:
+        events = data.get("data", [])
+        total_available = data.get("total_count", 0)
+        all_events.extend(events)
+
+        if not events:
+            break
+
+        logger.info("ACLED %s page %d: %d/%d fetched (total available: %s)",
+                    country_iso3, page, len(all_events), total_available, total_available)
+
+        if len(all_events) >= total_available or len(events) < PAGE_SIZE:
+            break
+        page += 1
+
+    if not all_events:
         logger.info("No ACLED events for %s in last %d days.", country_iso3, days)
         return 0
 
     conn = get_connection()
     count = 0
-    for ev in events:
+    for ev in all_events:
         try:
             conn.execute(
                 """INSERT OR IGNORE INTO acled_events
@@ -293,11 +313,95 @@ def ingest_gdelt(country_iso3: str, days: int = 7) -> int:
     return count
 
 
+def ingest_newsapi(country_config: dict, days: int = 7) -> int:
+    """
+    Fetch articles from NewsAPI for a country.
+    Uses the 'everything' endpoint with country name + risk keywords.
+
+    Returns number of articles ingested.
+    """
+    if not NEWSAPI_KEY:
+        logger.warning("NewsAPI key not set. Skipping.")
+        return 0
+
+    iso3 = country_config["iso3"]
+    country_name = country_config["name"]
+    from_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+
+    try:
+        resp = requests.get(
+            "https://newsapi.org/v2/everything",
+            params={
+                "q": f"{country_name} AND (politics OR conflict OR protest OR security OR military)",
+                "language": "en",
+                "sortBy": "publishedAt",
+                "pageSize": 20,
+                "from": from_date,
+            },
+            headers={"X-Api-Key": NEWSAPI_KEY},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        logger.warning("NewsAPI fetch failed for %s: %s", country_name, e)
+        return 0
+
+    articles = data.get("articles", [])
+    if not articles:
+        logger.info("No NewsAPI articles for %s.", country_name)
+        return 0
+
+    conn = get_connection()
+    count = 0
+
+    for art in articles:
+        title = art.get("title", "")
+        url = art.get("url", "")
+        published = art.get("publishedAt", "")
+        content = art.get("content", "") or art.get("description", "") or ""
+        source_name = art.get("source", {}).get("name", "NewsAPI")
+
+        if not title or not url:
+            continue
+
+        # Deduplicate
+        existing = conn.execute("SELECT id FROM articles WHERE url = ?", (url,)).fetchone()
+        if existing:
+            continue
+
+        # Fetch full text via trafilatura (NewsAPI free tier truncates content)
+        full_text = fetch_full_text(url) if url else ""
+        time.sleep(2)
+        if not full_text:
+            full_text = content
+
+        try:
+            insert_article(conn, iso3, title[:500], source_name,
+                           url[:1000], published[:100], full_text[:50000])
+            count += 1
+        except Exception as e:
+            logger.debug("Skipping NewsAPI article: %s", e)
+
+    conn.commit()
+    conn.close()
+    logger.info("Ingested %d NewsAPI articles for %s.", count, iso3)
+    return count
+
+
 def ingest_all(country_config: dict) -> dict:
     """Run all ingestion for a single country. Returns counts."""
     iso3 = country_config["iso3"]
+
+    # NewsAPI first, fall back to RSS if NewsAPI returns < 5
+    newsapi_count = ingest_newsapi(country_config)
+    rss_count = 0
+    if newsapi_count < 5:
+        rss_count = ingest_rss(country_config)
+
     return {
         "acled": ingest_acled(iso3),
-        "rss": ingest_rss(country_config),
+        "newsapi": newsapi_count,
+        "rss": rss_count,
         "gdelt": ingest_gdelt(iso3),
     }

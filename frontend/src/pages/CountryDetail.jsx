@@ -122,6 +122,72 @@ function ReasoningChains({ chains, narrative }) {
   );
 }
 
+const AGENT_LABELS = {
+  baserate: 'Base Rate Adjustment',
+  analogy: 'Historical Analogy',
+  decomposition: 'Decomposition',
+  devil: "Devil's Advocate",
+};
+
+const AGENT_COLORS = {
+  baserate: '#4fc3f7',
+  analogy: '#ab47bc',
+  decomposition: '#66bb6a',
+  devil: '#ff8c00',
+};
+
+function AgentOutputs({ agents }) {
+  if (!agents || agents.length === 0) return null;
+
+  return (
+    <div>
+      <h4 className="section-label">Forecasting Agents (Track B)</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.8rem', marginTop: '0.5rem' }}>
+        {agents.map((agent, i) => {
+          const label = AGENT_LABELS[agent.agent_type] || agent.agent_type;
+          const color = AGENT_COLORS[agent.agent_type] || '#888';
+          const r = agent.reasoning || {};
+          let details = [];
+
+          if (agent.agent_type === 'baserate') {
+            const ups = r.upward_adjustments || [];
+            const downs = r.downward_adjustments || [];
+            details = [...ups.slice(0, 2).map(a => `+${a.factor || ''}`),
+                        ...downs.slice(0, 2).map(a => `-${a.factor || ''}`)];
+          } else if (agent.agent_type === 'analogy') {
+            details = (r.analogies || []).slice(0, 2).map(a => `${a.country || '?'} ${a.year || '?'}`);
+          } else if (agent.agent_type === 'decomposition') {
+            details = (r.sub_questions || []).slice(0, 3).map(q => q.question ? q.question.slice(0, 50) : '');
+          } else if (agent.agent_type === 'devil') {
+            details = (r.contrarian_arguments || []).slice(0, 2).map(a => a.argument ? a.argument.slice(0, 60) : '');
+          }
+
+          return (
+            <div key={i} style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: `1px solid ${color}33`,
+              borderRadius: '6px',
+              padding: '0.8rem',
+            }}>
+              <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color, letterSpacing: '0.05em', marginBottom: '0.3rem' }}>
+                {label}
+              </div>
+              <div className="mono" style={{ fontSize: '1.4rem', fontWeight: 700, color }}>
+                {agent.probability != null ? `${Math.round(agent.probability * 100)}%` : '--'}
+              </div>
+              {details.length > 0 && (
+                <ul style={{ margin: '0.4rem 0 0 0', padding: '0 0 0 1rem', fontSize: '0.72rem', color: '#8899aa' }}>
+                  {details.map((d, j) => <li key={j}>{d}</li>)}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TrackBreakdown({ components }) {
   if (!components || Object.keys(components).length === 0) return null;
 
@@ -275,6 +341,10 @@ export default function CountryDetail() {
       <div className="detail-sections">
         <div className="detail-card">
           <TrackBreakdown components={reasoning.track_a_components} />
+        </div>
+
+        <div className="detail-card">
+          <AgentOutputs agents={detail.agent_outputs} />
         </div>
 
         <div className="detail-card">
