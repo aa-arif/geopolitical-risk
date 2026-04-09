@@ -88,9 +88,14 @@ function ReasoningChains({ chains, narrative }) {
                         {typeof f.confidence === 'number' ? `${Math.round(f.confidence * 100)}%` : ''}
                       </span>
                     </div>
+                    {f.mechanism && (
+                      <div style={{ fontSize: '0.76rem', color: '#9eaab8', paddingLeft: '1.6rem', fontStyle: 'italic' }}>
+                        {f.mechanism}
+                      </div>
+                    )}
                     {f.evidence && (
-                      <div style={{ fontSize: '0.78rem', color: '#8899aa', paddingLeft: '1.6rem', lineHeight: '1.5' }}>
-                        {f.evidence}
+                      <div style={{ fontSize: '0.75rem', color: '#6b7f99', paddingLeft: '1.6rem', lineHeight: '1.5' }}>
+                        "{f.evidence}"
                       </div>
                     )}
                   </li>
@@ -103,16 +108,33 @@ function ReasoningChains({ chains, narrative }) {
             <div style={{ marginTop: '1rem' }}>
               <div style={{ fontSize: '0.7rem', textTransform: 'uppercase', color: '#6b7f99', marginBottom: '0.4rem', letterSpacing: '0.05em' }}>Counterarguments</div>
               <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                {allCounterargs.map((c, i) => (
-                  <li key={i} style={{
-                    padding: '0.4rem 0.8rem',
-                    fontSize: '0.82rem',
-                    color: '#00e676',
-                    borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  }}>
-                    - {typeof c === 'string' ? c : JSON.stringify(c)}
-                  </li>
-                ))}
+                {allCounterargs.map((c, i) => {
+                  const arg = typeof c === 'string' ? c : (c.argument || JSON.stringify(c));
+                  const strength = typeof c === 'object' ? c.strength : null;
+                  const evidence = typeof c === 'object' ? c.evidence : null;
+                  const strengthColor = strength === 'strong' ? '#00e676' : strength === 'weak' ? '#ffd600' : '#4fc3f7';
+                  return (
+                    <li key={i} style={{
+                      padding: '0.5rem 0.8rem',
+                      fontSize: '0.82rem',
+                      borderBottom: '1px solid rgba(255,255,255,0.03)',
+                    }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'baseline' }}>
+                        {strength && (
+                          <span style={{ fontSize: '0.65rem', color: strengthColor, fontFamily: "'JetBrains Mono', monospace", textTransform: 'uppercase' }}>
+                            [{strength}]
+                          </span>
+                        )}
+                        <span style={{ color: '#00e676' }}>{arg}</span>
+                      </div>
+                      {evidence && (
+                        <div style={{ fontSize: '0.73rem', color: '#6b7f99', paddingLeft: strength ? '3rem' : '0', marginTop: '0.2rem' }}>
+                          "{evidence}"
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

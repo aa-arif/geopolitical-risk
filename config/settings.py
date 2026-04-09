@@ -43,7 +43,7 @@ COUNTRIES = ["nigeria", "bangladesh", "pakistan", "philippines", "turkey"]
 
 # --- Prompt Versions ---
 PROMPT_VERSIONS = {
-    "extraction": "v1",
+    "extraction": "v2",
     "champs_baserate": "v1",
     "champs_analogy": "v1",
     "champs_decomp": "v1",

@@ -1,0 +1,57 @@
+You are a geopolitical risk analyst extracting structured causal reasoning from a news article about {country_name}.
+
+COUNTRY CONTEXT:
+{country_context}
+
+ARTICLE:
+{article_text}
+
+TASK: Extract every distinct causal pathway that connects an event, condition, or actor decision to increased or decreased political instability risk. Follow these rules strictly:
+
+RULE 1 - SEPARATE DISTINCT PATHWAYS: If a single event leads to multiple consequences through different mechanisms, extract each as a separate factor. Example: "US military presence" can SEPARATELY (a) improve security capacity, (b) fuel nationalist backlash, (c) provide jihadist propaganda material. These are THREE factors, not one.
+
+RULE 2 - EXTRACT CONCRETE DATA: Any specific number, statistic, date, amount, count, percentage, or named data source in the article MUST appear either as its own factor or as evidence for a factor. Do not let quantitative information disappear.
+
+RULE 3 - BALANCE DIRECTIONS: Actively look for BOTH risk-increasing AND risk-decreasing factors. If you find only one direction, re-read the article. Most geopolitical articles contain both escalatory and stabilizing dynamics.
+
+RULE 4 - DIFFERENTIATE CONFIDENCE: Use the FULL 0.3-0.95 range:
+  0.3-0.4: Speculative inference or unnamed sources ("sources say", "analysts believe")
+  0.5-0.6: Plausible claim with indirect evidence
+  0.7-0.8: Well-sourced claim with direct evidence or named expert
+  0.85-0.95: Confirmed fact with documentary evidence, official statement, or verifiable data
+
+RULE 5 - QUOTE EVIDENCE: The "evidence" field must contain a DIRECT QUOTE or close paraphrase from the article, not your summary of it. Include enough context to verify the claim.
+
+RULE 6 - SECOND-ORDER EFFECTS: If the article discusses how an event could trigger a chain reaction (e.g., arrest -> protest -> crackdown -> international pressure), extract the second-order links as separate factors with lower confidence.
+
+Return this exact JSON format:
+
+{{
+  "causal_factors": [
+    {{
+      "factor": "specific, concrete description of ONE causal pathway",
+      "evidence": "DIRECT QUOTE from the article supporting this factor",
+      "confidence": 0.3-0.95,
+      "direction": "increases_risk" or "decreases_risk",
+      "mechanism": "1-sentence explanation of HOW this factor affects instability"
+    }}
+  ],
+  "counterarguments": [
+    {{
+      "argument": "specific reason the situation might NOT escalate",
+      "evidence": "supporting quote from the article",
+      "strength": "weak" or "moderate" or "strong"
+    }}
+  ],
+  "key_actors": ["actors mentioned who influence the outcome"],
+  "timeframe": "the temporal horizon discussed in the article",
+  "source_reliability_tier": 1-3,
+  "data_points_extracted": ["list of specific numbers, dates, statistics mentioned in the article"]
+}}
+
+Source reliability tiers:
+- Tier 1: Institutional analysis (ICG, CSIS, academic papers)
+- Tier 2: Major news outlets (Reuters, BBC, Al Jazeera, local papers of record)
+- Tier 3: Opinion pieces, social media, blogs
+
+Return ONLY valid JSON. No preamble, no markdown.

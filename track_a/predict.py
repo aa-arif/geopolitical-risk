@@ -74,6 +74,17 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
     )
     combined = float(np.clip(_from_logit(combined_logit), 0.02, 0.95))
 
+    # ACLED-based floor: prevents underestimation for countries with
+    # ongoing armed conflict that the polity score doesn't capture
+    # (e.g. Philippines: democracy but active insurgency)
+    acled_floor = 0.0
+    avg_monthly_events = _get_avg_monthly_events(db_conn, country_config["iso3"])
+    if avg_monthly_events > 100:
+        acled_floor = 0.12
+    elif avg_monthly_events > 50:
+        acled_floor = 0.08
+    combined = max(combined, acled_floor)
+
     return {
         "probability": combined,
         "components": {
@@ -82,5 +93,22 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
             "neighborhood_contagion": neighborhood,
             "gpr_trend": gpr_raw,
             "gpr_trend_description": gpr_description,
+            "acled_avg_monthly": avg_monthly_events,
+            "acled_floor_applied": acled_floor,
         },
     }
+
+
+def _get_avg_monthly_events(db_conn, country_iso3: str) -> float:
+    """Average monthly ACLED event count across all available data."""
+    cursor = db_conn.execute(
+        """SELECT COUNT(*) as total,
+                  COUNT(DISTINCT strftime('%Y-%m', event_date)) as months
+           FROM acled_events
+           WHERE country_iso3 = ?""",
+        (country_iso3,),
+    )
+    row = cursor.fetchone()
+    total = row["total"] or 0
+    months = row["months"] or 0
+    return total / months if months > 0 else 0.0
