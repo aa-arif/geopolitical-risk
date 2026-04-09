@@ -16,15 +16,16 @@ from pathlib import Path
 
 from utils.logger import logger
 
-_GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "gpr_monthly.xlsx"
+_GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "data_gpr_export.xls"
 
-# ISO3 -> possible GPR column name patterns (will be matched flexibly)
+# ISO3 -> GPR column names. Caldara-Iacoviello covers 44 countries;
+# Nigeria, Bangladesh, Pakistan are NOT in the dataset.
+# Philippines (GPRC_PHL) and Turkey (GPRC_TUR) are covered.
 _ISO3_TO_GPR_PATTERNS = {
-    "NGA": ["GPRC_NGA", "GPRC_Nigeria", "Nigeria"],
-    "BGD": ["GPRC_BGD", "GPRC_Bangladesh", "Bangladesh"],
-    "PAK": ["GPRC_PAK", "GPRC_Pakistan", "Pakistan"],
-    "PHL": ["GPRC_PHL", "GPRC_Philippines", "Philippines"],
-    "TUR": ["GPRC_TUR", "GPRC_Turkey", "Turkey"],
+    "PHL": ["GPRC_PHL"],
+    "TUR": ["GPRC_TUR"],
+    # Not in GPR dataset -- will use fallback placeholders:
+    # NGA, BGD, PAK
 }
 
 # Placeholder values used when Excel is unavailable.
