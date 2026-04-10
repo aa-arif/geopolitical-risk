@@ -1,0 +1,38 @@
+{
+  "name": "Thailand",
+  "acled_country_code": "THA",
+  "iso3": "THA",
+  "polity_code": -3,
+  "polity_category": "closed_anocracy",
+  "infant_mortality_per_1000": 7.2,
+  "gdp_per_capita_usd": 7066,
+  "population_millions": 71.8,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 4,
+  "neighboring_countries": ["MMR", "LAO", "KHM", "MYS"],
+  "v_dem_liberal_democracy_index": 0.22,
+  "v_dem_electoral_democracy_index": 0.30,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "PM Paetongtarn Shinawatra",
+    "Thai military",
+    "Move Forward Party/People's Party",
+    "Thai monarchy",
+    "Constitutional Court"
+  ],
+  "risk_context": "Ongoing tension between pro-democracy movement and military-monarchist establishment. Move Forward Party dissolved by Constitutional Court. Shinawatra family back in power through coalition deal. Deep south insurgency in Malay-Muslim provinces continues.",
+  "news_sources_rss": [
+    "https://www.bangkokpost.com/rss/data/most-recent.xml",
+    "https://www.thaipbsworld.com/feed",
+    "https://prachatai.com/english/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

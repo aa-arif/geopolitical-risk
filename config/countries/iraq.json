@@ -1,0 +1,38 @@
+{
+  "name": "Iraq",
+  "acled_country_code": "IRQ",
+  "iso3": "IRQ",
+  "polity_code": 5,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 21.0,
+  "gdp_per_capita_usd": 5540,
+  "population_millions": 44.5,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 2,
+  "neighboring_countries": ["TUR", "IRN", "KWT", "SAU", "JOR", "SYR"],
+  "v_dem_liberal_democracy_index": 0.18,
+  "v_dem_electoral_democracy_index": 0.25,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "PM Mohammed Shia al-Sudani",
+    "Muqtada al-Sadr",
+    "Popular Mobilization Forces (PMF)",
+    "Kurdistan Regional Government",
+    "Iran-backed militias"
+  ],
+  "risk_context": "Fragile post-ISIS stability with sectarian power-sharing government. Iran-backed militias operate semi-autonomously. Kurdistan tensions over oil revenue and territory. US military presence remains contentious.",
+  "news_sources_rss": [
+    "https://www.rudaw.net/english/rss",
+    "https://www.iraqinews.com/feed",
+    "https://www.al-monitor.com/rss"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

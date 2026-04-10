@@ -1,0 +1,38 @@
+{
+  "name": "Ukraine",
+  "acled_country_code": "UKR",
+  "iso3": "UKR",
+  "polity_code": 4,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 7.0,
+  "gdp_per_capita_usd": 4530,
+  "population_millions": 37.0,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["RUS", "BLR", "POL", "SVK", "HUN", "ROU", "MDA"],
+  "v_dem_liberal_democracy_index": 0.34,
+  "v_dem_electoral_democracy_index": 0.42,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "President Volodymyr Zelensky",
+    "Russian Federation (Putin)",
+    "Ukrainian Armed Forces",
+    "EU/NATO partners",
+    "Wagner Group/Russian PMCs"
+  ],
+  "risk_context": "Active war with Russia since 2022 full-scale invasion. Front lines largely static with attritional warfare. Western military aid critical. Internal political tensions over mobilization, corruption, and war fatigue. Nuclear escalation risk.",
+  "news_sources_rss": [
+    "https://kyivindependent.com/feed",
+    "https://www.ukrinform.net/rss/block-lastnews",
+    "https://english.nv.ua/rss/all.xml"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

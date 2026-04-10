@@ -1,0 +1,38 @@
+{
+  "name": "Myanmar",
+  "acled_country_code": "MMR",
+  "iso3": "MMR",
+  "polity_code": -6,
+  "polity_category": "military_autocracy",
+  "infant_mortality_per_1000": 35.8,
+  "gdp_per_capita_usd": 1210,
+  "population_millions": 54.8,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["BGD", "IND", "CHN", "LAO", "THA"],
+  "v_dem_liberal_democracy_index": 0.05,
+  "v_dem_electoral_democracy_index": 0.07,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "State Administration Council (Min Aung Hlaing)",
+    "National Unity Government (NUG)",
+    "Ethnic armed organizations (EAOs)",
+    "People's Defence Force (PDF)",
+    "China (border influence)"
+  ],
+  "risk_context": "Active civil war following 2021 coup. Military junta losing territorial control to resistance forces and ethnic armies. Humanitarian crisis with millions displaced. China maintains influence over ceasefire dynamics.",
+  "news_sources_rss": [
+    "https://www.irrawaddy.com/feed",
+    "https://www.myanmar-now.org/en/feed",
+    "https://www.frontiermyanmar.net/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

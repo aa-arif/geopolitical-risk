@@ -1,0 +1,38 @@
+{
+  "name": "Ethiopia",
+  "acled_country_code": "ETH",
+  "iso3": "ETH",
+  "polity_code": 1,
+  "polity_category": "partial_democracy_factionalized",
+  "infant_mortality_per_1000": 34.0,
+  "gdp_per_capita_usd": 1027,
+  "population_millions": 126.5,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["ERI", "DJI", "SOM", "KEN", "SSD", "SDN"],
+  "v_dem_liberal_democracy_index": 0.10,
+  "v_dem_electoral_democracy_index": 0.16,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "PM Abiy Ahmed",
+    "TPLF (Tigray People's Liberation Front)",
+    "OLA (Oromo Liberation Army)",
+    "Ethiopian National Defense Force",
+    "Amhara Fano militia"
+  ],
+  "risk_context": "Post-Tigray War ceasefire holding since 2022 but Amhara Fano insurgency ongoing. Ethnic federalism creates multiple fault lines. Dam dispute with Egypt and Sudan adds regional tension.",
+  "news_sources_rss": [
+    "https://addisstandard.com/feed",
+    "https://borkena.com/feed",
+    "https://www.ethiopianmonitor.com/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

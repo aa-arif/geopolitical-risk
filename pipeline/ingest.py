@@ -86,6 +86,16 @@ _ISO3_TO_COUNTRY_NAME = {
     "PAK": "Pakistan",
     "PHL": "Philippines",
     "TUR": "Turkey",
+    "ETH": "Ethiopia",
+    "MMR": "Myanmar",
+    "IRQ": "Iraq",
+    "COL": "Colombia",
+    "SDN": "Sudan",
+    "COD": "Democratic Republic of Congo",
+    "EGY": "Egypt",
+    "THA": "Thailand",
+    "KEN": "Kenya",
+    "UKR": "Ukraine",
 }
 
 

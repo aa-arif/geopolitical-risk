@@ -1,0 +1,38 @@
+{
+  "name": "Sudan",
+  "acled_country_code": "SDN",
+  "iso3": "SDN",
+  "polity_code": -2,
+  "polity_category": "anocracy",
+  "infant_mortality_per_1000": 40.8,
+  "gdp_per_capita_usd": 516,
+  "population_millions": 48.1,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["EGY", "LBY", "TCD", "CAF", "SSD", "ETH", "ERI"],
+  "v_dem_liberal_democracy_index": 0.04,
+  "v_dem_electoral_democracy_index": 0.06,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "SAF General Abdel Fattah al-Burhan",
+    "RSF General Mohamed Hamdan Dagalo (Hemedti)",
+    "Civilian pro-democracy movement",
+    "UAE (RSF supporter)",
+    "Egypt/Saudi Arabia (SAF supporters)"
+  ],
+  "risk_context": "Active civil war since April 2023 between SAF and RSF. Catastrophic humanitarian crisis with world's largest displacement. Regional proxy dimensions with UAE backing RSF and Egypt supporting SAF. Risk of state collapse.",
+  "news_sources_rss": [
+    "https://sudantribune.com/feed",
+    "https://www.dabangasudan.org/en/rss",
+    "https://www.aljazeera.com/tag/sudan/rss"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

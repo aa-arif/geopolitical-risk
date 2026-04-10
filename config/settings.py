@@ -38,7 +38,11 @@ ACLED_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
 NEIGHBORHOOD_LOOKBACK_DAYS = 90
 
 # --- Countries ---
-COUNTRIES = ["nigeria", "bangladesh", "pakistan", "philippines", "turkey"]
+COUNTRIES = [
+    "nigeria", "bangladesh", "pakistan", "philippines", "turkey",
+    "ethiopia", "myanmar", "iraq", "colombia", "sudan",
+    "cod", "egypt", "thailand", "kenya", "ukraine",
+]
 
 # --- Prompt Versions ---
 PROMPT_VERSIONS = {

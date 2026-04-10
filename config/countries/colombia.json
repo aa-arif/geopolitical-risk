@@ -1,0 +1,38 @@
+{
+  "name": "Colombia",
+  "acled_country_code": "COL",
+  "iso3": "COL",
+  "polity_code": 7,
+  "polity_category": "democracy",
+  "infant_mortality_per_1000": 11.5,
+  "gdp_per_capita_usd": 6630,
+  "population_millions": 52.1,
+  "terrain_ruggedness": "very_high",
+  "years_since_last_instability": 3,
+  "neighboring_countries": ["VEN", "BRA", "PER", "ECU", "PAN"],
+  "v_dem_liberal_democracy_index": 0.52,
+  "v_dem_electoral_democracy_index": 0.62,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "President Gustavo Petro",
+    "ELN (National Liberation Army)",
+    "FARC dissident groups",
+    "Gulf Clan (Clan del Golfo)",
+    "Colombian military"
+  ],
+  "risk_context": "Peace process with ELN stalled. FARC dissident groups and drug trafficking organizations control significant rural territory. Petro's 'Total Peace' policy faces opposition. Venezuelan migration crisis adding pressure.",
+  "news_sources_rss": [
+    "https://colombiareports.com/feed",
+    "https://www.elespectador.com/rss",
+    "https://www.semana.com/rss"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}
