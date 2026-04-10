@@ -249,20 +249,19 @@ def ingest_rss(country_config: dict) -> int:
     return total
 
 
-def ingest_gdelt(country_iso3: str, days: int = 7) -> int:
+def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     """
-    Fetch GDELT events for a country (via GDELT DOC API).
+    Fetch conflict-related articles from GDELT DOC 2.0 API.
+    Stores in the articles table with full text via trafilatura.
 
-    Returns number of events stored.
+    Returns number of articles ingested.
     """
-    country_names = {
-        "NGA": "Nigeria", "BGD": "Bangladesh", "PAK": "Pakistan",
-        "PHL": "Philippines", "TUR": "Turkey",
-    }
-    country_name = country_names.get(country_iso3, country_iso3)
+    iso3 = country_config["iso3"]
+    country_name = country_config["name"]
 
+    query = f"{country_name} (protest OR conflict OR military OR attack OR violence OR coup)"
     params = urllib.parse.urlencode({
-        "query": f"{country_name} protest OR conflict OR instability",
+        "query": query,
         "mode": "ArtList",
         "maxrecords": 50,
         "format": "json",
@@ -272,44 +271,129 @@ def ingest_gdelt(country_iso3: str, days: int = 7) -> int:
     url = f"{GDELT_API_BASE}?{params}"
 
     try:
-        raw = _http_get(url)
+        raw = _http_get(url, timeout=45)
         data = json.loads(raw)
     except Exception as e:
-        logger.warning("GDELT fetch failed for %s: %s", country_iso3, e)
+        logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
         return 0
 
     articles = data.get("articles", [])
     if not articles:
+        logger.info("No GDELT articles for %s.", iso3)
         return 0
 
     conn = get_connection()
     count = 0
 
-    for art in articles:
-        tone = art.get("tone", 0)
+    for art in articles[:30]:  # Cap at 30 to limit scraping time
+        art_url = art.get("url", "")
+        title = art.get("title", "")
+        seen_date = art.get("seendate", "")[:10]
+        domain = art.get("domain", "GDELT")
+
+        if not art_url or not title:
+            continue
+
+        # Deduplicate by URL
+        existing = conn.execute("SELECT id FROM articles WHERE url = ?", (art_url,)).fetchone()
+        if existing:
+            continue
+
+        # Fetch full text
+        full_text = fetch_full_text(art_url)
+        time.sleep(2)
+        if not full_text:
+            full_text = title  # Minimal fallback
+
         try:
-            conn.execute(
-                """INSERT INTO gdelt_events
-                   (country_iso3, event_date, event_code, goldstein_scale,
-                    num_mentions, avg_tone, source_url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    country_iso3,
-                    art.get("seendate", "")[:10],
-                    "",
-                    float(tone) if tone else 0.0,
-                    1,
-                    float(tone) if tone else 0.0,
-                    art.get("url", "")[:1000],
-                ),
-            )
+            insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
+                           art_url[:1000], seen_date, full_text[:50000])
             count += 1
         except Exception as e:
-            logger.debug("Skipping GDELT event: %s", e)
+            logger.debug("Skipping GDELT article: %s", e)
 
     conn.commit()
     conn.close()
-    logger.info("Ingested %d GDELT events for %s.", count, country_iso3)
+    logger.info("Ingested %d GDELT articles for %s.", count, iso3)
+    return count
+
+
+def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
+    """
+    Fetch conflict event data from GDELT DOC API using artlist mode.
+    Aggregates articles by date to produce daily conflict event counts.
+    Stores in gdelt_conflict_events table as a supplement to ACLED.
+
+    Returns number of daily records ingested.
+    """
+    iso3 = country_config["iso3"]
+    country_name = country_config["name"]
+
+    query = f"{country_name} (conflict OR protest OR attack OR violence OR coup)"
+    params = urllib.parse.urlencode({
+        "query": query,
+        "mode": "artlist",
+        "maxrecords": 250,
+        "format": "json",
+        "timespan": f"{days}d",
+    })
+
+    url = f"{GDELT_API_BASE}?{params}"
+
+    try:
+        raw = _http_get(url, timeout=45)
+        data = json.loads(raw)
+    except Exception as e:
+        logger.warning("GDELT events fetch failed for %s: %s", iso3, e)
+        return 0
+
+    articles = data.get("articles", [])
+    if not articles:
+        logger.info("No GDELT event articles for %s.", iso3)
+        return 0
+
+    # Aggregate by date: count articles and average tone per day
+    from collections import defaultdict
+    daily = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
+    for art in articles:
+        seen = art.get("seendate", "")[:10]  # YYYYMMDD format
+        if len(seen) == 8:
+            seen = f"{seen[:4]}-{seen[4:6]}-{seen[6:8]}"
+        elif len(seen) == 10 and "-" not in seen:
+            seen = f"{seen[:4]}-{seen[4:6]}-{seen[6:8]}"
+        if not seen or len(seen) < 10:
+            continue
+        daily[seen]["count"] += 1
+        tone = art.get("tone", 0)
+        if tone:
+            daily[seen]["tones"].append(float(tone))
+        if art.get("url"):
+            daily[seen]["urls"].append(art["url"])
+
+    conn = get_connection()
+    count = 0
+
+    for event_date, info in sorted(daily.items()):
+        avg_tone = sum(info["tones"]) / len(info["tones"]) if info["tones"] else 0.0
+        sample_url = info["urls"][0] if info["urls"] else ""
+
+        try:
+            conn.execute(
+                """INSERT INTO gdelt_conflict_events
+                   (country_iso3, event_date, event_type, num_articles,
+                    avg_tone, latitude, longitude, source_url)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (iso3, event_date, "conflict_coverage", info["count"],
+                 avg_tone, None, None, sample_url[:1000]),
+            )
+            count += 1
+        except Exception as e:
+            logger.debug("Skipping GDELT daily aggregate: %s", e)
+
+    conn.commit()
+    conn.close()
+    logger.info("Ingested %d GDELT daily event records for %s (%d articles total).",
+                count, iso3, len(articles))
     return count
 
 
@@ -403,5 +487,6 @@ def ingest_all(country_config: dict) -> dict:
         "acled": ingest_acled(iso3),
         "newsapi": newsapi_count,
         "rss": rss_count,
-        "gdelt": ingest_gdelt(iso3),
+        "gdelt_articles": ingest_gdelt(country_config),
+        "gdelt_events": ingest_gdelt_events(country_config),
     }

@@ -1,28 +1,27 @@
 """
 Automated prediction resolution.
-When a 30-day prediction window closes, query ACLED to determine
-if the instability threshold was exceeded.
+When a 30-day prediction window closes, query ACLED (primary) or
+GDELT conflict events (fallback) to determine if the instability
+threshold was exceeded.
 """
 
 from datetime import datetime, timezone
 
-from config.settings import load_country_config, COUNTRIES
 from utils.db import compute_event_threshold
 from evaluation.brier import brier_score
 from utils.logger import logger
 
+# GDELT threshold: if no ACLED data, use GDELT conflict event count.
+# GDELT events are less curated, so threshold is higher.
+GDELT_INSTABILITY_THRESHOLD = 100
+
 
 def resolve_expired_predictions(conn, country_iso3: str = None):
     """
-    Check all expired prediction windows and resolve them
-    by comparing ACLED event counts against the 90th percentile threshold.
+    Check all expired prediction windows and resolve them using
+    ACLED data (primary) or GDELT conflict events (fallback).
 
-    Args:
-        conn: Database connection
-        country_iso3: Optional filter by country. If None, resolves all.
-
-    Returns:
-        List of resolved prediction dicts.
+    Returns list of resolved prediction dicts.
     """
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -57,31 +56,53 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         window_end = pred["window_end_date"]
         calibrated_p = pred["calibrated_probability"]
 
-        # Compute event threshold for this country
+        # Try ACLED first
         threshold = compute_event_threshold(conn, iso3, months=12)
-
-        # Count ACLED events during the prediction window
-        event_cursor = conn.execute(
+        acled_cursor = conn.execute(
             """SELECT COUNT(*) as cnt FROM acled_events
                WHERE country_iso3 = ?
                AND event_date >= ? AND event_date <= ?""",
             (iso3, pred_date, window_end),
         )
-        event_count = event_cursor.fetchone()["cnt"]
+        acled_count = acled_cursor.fetchone()["cnt"]
 
-        # Determine outcome: 1 if events exceeded threshold, 0 otherwise
-        # If no threshold data (no ACLED history), leave unresolved
-        if threshold <= 0:
+        # Try GDELT conflict events as fallback
+        gdelt_cursor = conn.execute(
+            """SELECT COUNT(*) as cnt FROM gdelt_conflict_events
+               WHERE country_iso3 = ?
+               AND event_date >= ? AND event_date <= ?""",
+            (iso3, pred_date, window_end),
+        )
+        gdelt_count = gdelt_cursor.fetchone()["cnt"]
+
+        # Determine resolution source and outcome
+        resolution_source = None
+        actual_outcome = None
+        event_count = 0
+
+        if acled_count > 0 and threshold > 0:
+            # Primary: ACLED
+            resolution_source = "acled"
+            event_count = acled_count
+            actual_outcome = 1 if acled_count > threshold else 0
+        elif gdelt_count > 0:
+            # Fallback: GDELT conflict events
+            resolution_source = "gdelt"
+            event_count = gdelt_count
+            actual_outcome = 1 if gdelt_count > GDELT_INSTABILITY_THRESHOLD else 0
+            logger.info(
+                "Using GDELT fallback for %s pred %d (ACLED count=%d, GDELT count=%d)",
+                iso3, pred["id"], acled_count, gdelt_count,
+            )
+        else:
             logger.warning(
-                "No ACLED threshold for %s (pred %s). Skipping resolution.",
-                iso3, pred["id"],
+                "No ACLED or GDELT data for %s (pred %d, %s to %s). Skipping.",
+                iso3, pred["id"], pred_date, window_end,
             )
             continue
 
-        actual_outcome = 1 if event_count > threshold else 0
         bs = brier_score(calibrated_p, actual_outcome)
 
-        # Update the prediction row
         conn.execute(
             """UPDATE predictions
                SET resolved = TRUE, actual_outcome = ?, brier_score = ?
@@ -90,10 +111,12 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         )
 
         logger.info(
-            "Resolved prediction %d for %s (%s to %s): "
-            "events=%d threshold=%.0f outcome=%d brier=%.4f",
-            pred["id"], iso3, pred_date, window_end,
-            event_count, threshold, actual_outcome, bs,
+            "Resolved prediction %d for %s (%s to %s) via %s: "
+            "events=%d threshold=%s outcome=%d brier=%.4f",
+            pred["id"], iso3, pred_date, window_end, resolution_source,
+            event_count,
+            f"{threshold:.0f}" if resolution_source == "acled" else f"{GDELT_INSTABILITY_THRESHOLD}",
+            actual_outcome, bs,
         )
 
         resolved.append({
@@ -102,9 +125,10 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
             "prediction_date": pred_date,
             "window_end_date": window_end,
             "event_count": event_count,
-            "threshold": threshold,
+            "threshold": threshold if resolution_source == "acled" else GDELT_INSTABILITY_THRESHOLD,
             "actual_outcome": actual_outcome,
             "brier_score": bs,
+            "resolution_source": resolution_source,
         })
 
     conn.commit()

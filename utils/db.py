@@ -110,6 +110,22 @@ def initialize_db():
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
+        CREATE TABLE IF NOT EXISTS gdelt_conflict_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_iso3 TEXT NOT NULL,
+            event_date TEXT NOT NULL,
+            event_type TEXT,
+            num_articles INTEGER DEFAULT 1,
+            avg_tone REAL,
+            latitude REAL,
+            longitude REAL,
+            source_url TEXT,
+            pulled_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_gdelt_conflict_country_date
+            ON gdelt_conflict_events(country_iso3, event_date);
+
         CREATE TABLE IF NOT EXISTS evaluations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             evaluation_date TEXT NOT NULL,

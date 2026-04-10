@@ -61,9 +61,11 @@ def run_country(country_name: str) -> dict:
     # --- Step 1: Ingest ---
     logger.info("[1/8] Ingesting data for %s...", iso3)
     ingest_counts = ingest_all(country_config)
-    logger.info("Ingestion: ACLED=%d, NewsAPI=%d, RSS=%d, GDELT=%d",
+    logger.info("Ingestion: ACLED=%d, NewsAPI=%d, RSS=%d, GDELT_art=%d, GDELT_ev=%d",
                 ingest_counts["acled"], ingest_counts.get("newsapi", 0),
-                ingest_counts.get("rss", 0), ingest_counts["gdelt"])
+                ingest_counts.get("rss", 0),
+                ingest_counts.get("gdelt_articles", 0),
+                ingest_counts.get("gdelt_events", 0))
 
     # --- Compute event threshold ---
     event_threshold = compute_event_threshold(conn, iso3, months=12)
