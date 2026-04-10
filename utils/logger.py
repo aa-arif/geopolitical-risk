@@ -7,14 +7,34 @@ data snapshot hash, and timestamps for full reproducibility.
 import hashlib
 import json
 import logging
+import os
 from datetime import datetime, timezone
+from pathlib import Path
 
-# Configure module logger
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-)
+# Configure module logger with both console and file handlers
+LOG_DIR = Path(__file__).parent.parent / "data" / "pipeline_logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
 logger = logging.getLogger("georisk")
+logger.setLevel(logging.INFO)
+
+# Console handler
+if not logger.handlers:
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    ))
+    logger.addHandler(console_handler)
+
+    # File handler (daily rotation by filename)
+    log_file = LOG_DIR / f"pipeline_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.log"
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    ))
+    logger.addHandler(file_handler)
 
 
 def compute_data_hash(country_iso3: str, acled_count: int,
@@ -57,6 +77,7 @@ def log_prediction(db_conn, prediction_data: dict) -> int:
     )
     db_conn.commit()
     prediction_id = cursor.lastrowid
+
     logger.info(
         "Prediction logged (id=%d): %s P=%.3f (A=%.3f, B=%.3f, fused=%.3f)",
         prediction_id,

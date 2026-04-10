@@ -190,15 +190,28 @@ def get_recent_reasoning_chains(conn, country_iso3: str, days: int = 7) -> list:
 
 
 def get_acled_summary(conn, country_iso3: str, days: int = 30) -> dict:
-    """Get ACLED event summary for a country over the last N days."""
+    """
+    Get ACLED event summary for a country over the most recent N days
+    of available data (not the last N calendar days from today).
+    """
+    # Find the latest event date for this country
+    latest_row = conn.execute(
+        "SELECT MAX(event_date) as d FROM acled_events WHERE country_iso3 = ?",
+        (country_iso3,)
+    ).fetchone()
+    latest_date = latest_row["d"] if latest_row else None
+
+    if not latest_date:
+        return {"total_events": 0, "total_fatalities": 0, "by_type": [], "period_days": days}
+
     cursor = conn.execute(
         """SELECT event_type, COUNT(*) as count, SUM(fatalities) as total_fatalities
            FROM acled_events
            WHERE country_iso3 = ?
-           AND event_date >= date('now', ? || ' days')
+           AND event_date >= date(?, ? || ' days')
            GROUP BY event_type
            ORDER BY count DESC""",
-        (country_iso3, f"-{days}")
+        (country_iso3, latest_date, f"-{days}")
     )
     rows = [dict(r) for r in cursor.fetchall()]
     total_events = sum(r["count"] for r in rows)

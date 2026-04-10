@@ -2,9 +2,17 @@
 __pycache__/
 *.pyc
 data/geopolitical.db
+data/geopolitical.db-wal
+data/geopolitical.db-shm
 data/calibration_model.pkl
 data/articles/
+data/*.xls
+data/*.xlsx
 node_modules/
 frontend/build/
 frontend/dist/
 .DS_Store
+*.log
+session.txt
+.claude/
+data/pipeline_logs/
