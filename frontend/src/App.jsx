@@ -1,10 +1,13 @@
 import React from 'react';
-import { Routes, Route, NavLink } from 'react-router-dom';
+import { Routes, Route, NavLink, useLocation } from 'react-router-dom';
+import { AnimatePresence } from 'framer-motion';
 import Dashboard from './pages/Dashboard';
 import CountryDetail from './pages/CountryDetail';
 import Evaluation from './pages/Evaluation';
 
 export default function App() {
+  const location = useLocation();
+
   return (
     <div className="app">
       <header className="app-header">
@@ -22,11 +25,13 @@ export default function App() {
         </nav>
       </header>
       <main className="app-main">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/country/:iso3" element={<CountryDetail />} />
-          <Route path="/evaluation" element={<Evaluation />} />
-        </Routes>
+        <AnimatePresence mode="wait">
+          <Routes location={location} key={location.pathname}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/country/:iso3" element={<CountryDetail />} />
+            <Route path="/evaluation" element={<Evaluation />} />
+          </Routes>
+        </AnimatePresence>
       </main>
     </div>
   );
