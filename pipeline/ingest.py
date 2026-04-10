@@ -263,7 +263,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     params = urllib.parse.urlencode({
         "query": query,
         "mode": "ArtList",
-        "maxrecords": 50,
+        "maxrecords": 250,
         "format": "json",
         "timespan": f"{days}d",
     })
@@ -271,7 +271,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     url = f"{GDELT_API_BASE}?{params}"
 
     try:
-        raw = _http_get(url, timeout=45)
+        raw = _http_get(url, timeout=120)
         data = json.loads(raw)
     except Exception as e:
         logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
@@ -284,8 +284,9 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
     conn = get_connection()
     count = 0
+    scraped = 0
 
-    for art in articles[:30]:  # Cap at 30 to limit scraping time
+    for i, art in enumerate(articles):
         art_url = art.get("url", "")
         title = art.get("title", "")
         seen_date = art.get("seendate", "")[:10]
@@ -299,11 +300,14 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
         if existing:
             continue
 
-        # Fetch full text
-        full_text = fetch_full_text(art_url)
-        time.sleep(2)
+        # Only scrape full text for the first 20 new articles
+        full_text = ""
+        if scraped < 20:
+            full_text = fetch_full_text(art_url)
+            scraped += 1
+            time.sleep(2)
         if not full_text:
-            full_text = title  # Minimal fallback
+            full_text = title  # Store title as minimal text for the rest
 
         try:
             insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
@@ -314,7 +318,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
     conn.commit()
     conn.close()
-    logger.info("Ingested %d GDELT articles for %s.", count, iso3)
+    logger.info("Ingested %d GDELT articles for %s (%d with full text).", count, iso3, scraped)
     return count
 
 
@@ -341,7 +345,7 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     url = f"{GDELT_API_BASE}?{params}"
 
     try:
-        raw = _http_get(url, timeout=45)
+        raw = _http_get(url, timeout=120)
         data = json.loads(raw)
     except Exception as e:
         logger.warning("GDELT events fetch failed for %s: %s", iso3, e)
