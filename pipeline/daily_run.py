@@ -68,6 +68,20 @@ def run_country(country_name: str) -> dict:
                 ingest_counts.get("gdelt_articles", 0),
                 ingest_counts.get("gdelt_events", 0))
 
+    # --- Seed articles if cold start ---
+    article_count = conn.execute(
+        "SELECT COUNT(*) FROM articles WHERE country_iso3 = ? AND LENGTH(full_text) > 200",
+        (iso3,)
+    ).fetchone()[0]
+    if article_count < 3:
+        logger.info("Cold start for %s (%d articles). Running supplementary ingestion...", iso3, article_count)
+        from pipeline.ingest import ingest_newsapi, ingest_gdelt
+        seed_config = dict(country_config)
+        # Broader NewsAPI search with 14-day lookback
+        extra_news = ingest_newsapi(seed_config, days=14)
+        extra_gdelt = ingest_gdelt(seed_config, days=14)
+        logger.info("Supplementary ingestion for %s: NewsAPI=%d, GDELT=%d", iso3, extra_news, extra_gdelt)
+
     # --- Compute event threshold ---
     event_threshold = compute_event_threshold(conn, iso3, months=12)
     logger.info("Event threshold (90th pct) for %s: %.0f events/month", iso3, event_threshold)
@@ -118,7 +132,14 @@ def run_country(country_name: str) -> dict:
     # --- Step 4: Track B Ensemble ---
     logger.info("[4/8] Running Track B forecasting ensemble...")
     chains = get_recent_reasoning_chains(conn, iso3, days=7)
-    reasoning_summary = summarize_reasoning_chains(chains)
+    if chains:
+        reasoning_summary = summarize_reasoning_chains(chains)
+    else:
+        reasoning_summary = (
+            f"No recent articles available. Country context: "
+            f"{country_config['risk_context']}"
+        )
+        logger.info("No reasoning chains for %s, using country context as fallback.", iso3)
     acled_data = get_acled_summary(conn, iso3, days=30)
 
     ensemble_results = run_ensemble(country_config, track_a, reasoning_summary, acled_data)

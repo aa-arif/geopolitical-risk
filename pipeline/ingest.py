@@ -5,6 +5,7 @@ Fetches data from ACLED (OAuth), NewsAPI, GDELT, RSS feeds (feedparser + trafila
 
 import json
 import time
+import urllib.error
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta, timezone
@@ -280,12 +281,24 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
     url = f"{GDELT_API_BASE}?{params}"
 
-    try:
-        raw = _http_get(url, timeout=120)
-        data = json.loads(raw)
-    except Exception as e:
-        logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
-        return 0
+    # Delay to avoid 429 when running many countries in parallel
+    time.sleep(5)
+
+    for attempt in range(2):
+        try:
+            raw = _http_get(url, timeout=120)
+            data = json.loads(raw)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and attempt == 0:
+                logger.info("GDELT rate limited for %s, retrying in 30s...", iso3)
+                time.sleep(30)
+                continue
+            logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
+            return 0
+        except Exception as e:
+            logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
+            return 0
 
     articles = data.get("articles", [])
     if not articles:
