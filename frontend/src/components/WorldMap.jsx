@@ -4,23 +4,14 @@ import * as d3 from 'd3';
 import { motion } from 'framer-motion';
 import * as topojson from 'topojson-client';
 
-// ISO numeric to ISO3 mapping for our 15 tracked countries
+// ISO numeric to ISO3 mapping for all 30 tracked countries
 const ISO_NUM_TO_ISO3 = {
-  '566': 'NGA',
-  '050': 'BGD',
-  '586': 'PAK',
-  '608': 'PHL',
-  '792': 'TUR',
-  '231': 'ETH',
-  '104': 'MMR',
-  '368': 'IRQ',
-  '170': 'COL',
-  '736': 'SDN',
-  '180': 'COD',
-  '818': 'EGY',
-  '764': 'THA',
-  '404': 'KEN',
-  '804': 'UKR',
+  '566': 'NGA', '050': 'BGD', '586': 'PAK', '608': 'PHL', '792': 'TUR',
+  '231': 'ETH', '104': 'MMR', '368': 'IRQ', '170': 'COL', '736': 'SDN',
+  '180': 'COD', '818': 'EGY', '764': 'THA', '404': 'KEN', '804': 'UKR',
+  '706': 'SOM', '887': 'YEM', '004': 'AFG', '434': 'LBY', '466': 'MLI',
+  '508': 'MOZ', '862': 'VEN', '332': 'HTI', '422': 'LBN', '710': 'ZAF',
+  '356': 'IND', '484': 'MEX', '562': 'NER', '120': 'CMR', '148': 'TCD',
 };
 
 const RISK_COLORS = {
