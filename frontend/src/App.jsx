@@ -7,21 +7,16 @@ import Evaluation from './pages/Evaluation';
 
 export default function App() {
   const location = useLocation();
-
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-left">
           <h1 className="logo">GEO<span className="logo-accent">RISK</span></h1>
-          <span className="logo-sub">Geopolitical Risk Intelligence</span>
+          <span className="logo-sub">Intelligence Platform</span>
         </div>
         <nav className="main-nav">
-          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/evaluation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>
-            Evaluation
-          </NavLink>
+          <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
+          <NavLink to="/evaluation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Evaluation</NavLink>
         </nav>
       </header>
       <main className="app-main">
