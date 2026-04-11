@@ -1,0 +1,38 @@
+{
+  "name": "Mali",
+  "acled_country_code": "MLI",
+  "iso3": "MLI",
+  "polity_code": -5,
+  "polity_category": "closed_anocracy",
+  "infant_mortality_per_1000": 57.0,
+  "gdp_per_capita_usd": 887,
+  "population_millions": 22.9,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["DZA", "NER", "BFA", "CIV", "GIN", "SEN", "MRT"],
+  "v_dem_liberal_democracy_index": 0.08,
+  "v_dem_electoral_democracy_index": 0.12,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "Military junta (Col. Assimi Goita)",
+    "JNIM (al-Qaeda affiliate)",
+    "ISGS (ISIS affiliate)",
+    "Russian Africa Corps (ex-Wagner)",
+    "Tuareg separatists"
+  ],
+  "risk_context": "Military junta expelled French forces and partnered with Russian mercenaries. Jihadist groups control significant territory in center and north. Tuareg peace agreement collapsed. Part of Sahel military alliance with Niger and Burkina Faso.",
+  "news_sources_rss": [
+    "https://www.maliweb.net/feed",
+    "https://bamada.net/feed",
+    "https://www.jeuneafrique.com/feeds/rss/"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Somalia",
+  "acled_country_code": "SOM",
+  "iso3": "SOM",
+  "polity_code": -1,
+  "polity_category": "anocracy",
+  "infant_mortality_per_1000": 88.0,
+  "gdp_per_capita_usd": 447,
+  "population_millions": 18.1,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["ETH", "DJI", "KEN"],
+  "v_dem_liberal_democracy_index": 0.06,
+  "v_dem_electoral_democracy_index": 0.09,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "President Hassan Sheikh Mohamud",
+    "Al-Shabaab",
+    "Somali National Army",
+    "African Union Transition Mission (ATMIS)",
+    "Clan leaders"
+  ],
+  "risk_context": "Fragile federal government battling Al-Shabaab insurgency with international support. Clan-based politics fragment governance. ATMIS drawdown creates security vacuum risk. Humanitarian crisis from drought and displacement.",
+  "news_sources_rss": [
+    "https://www.garoweonline.com/en/rss",
+    "https://www.hiiraan.com/rss",
+    "https://www.radiodalsan.com/en/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

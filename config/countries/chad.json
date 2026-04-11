@@ -1,0 +1,38 @@
+{
+  "name": "Chad",
+  "acled_country_code": "TCD",
+  "iso3": "TCD",
+  "polity_code": -2,
+  "polity_category": "anocracy",
+  "infant_mortality_per_1000": 63.0,
+  "gdp_per_capita_usd": 690,
+  "population_millions": 18.3,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["LBY", "SDN", "CAF", "CMR", "NGA", "NER"],
+  "v_dem_liberal_democracy_index": 0.06,
+  "v_dem_electoral_democracy_index": 0.09,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "President Mahamat Idriss Deby",
+    "Military",
+    "FACT rebel group",
+    "France (military base)",
+    "Sudanese refugee influx"
+  ],
+  "risk_context": "Dynastic succession after Idriss Deby's death. Son consolidated power through disputed 2024 election. Rebel threats from Libya border. Massive Sudanese refugee influx straining resources. French military hub for Sahel operations.",
+  "news_sources_rss": [
+    "https://tchadinfos.com/feed",
+    "https://www.alwihdainfo.com/feed",
+    "https://www.jeuneafrique.com/feeds/rss/"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

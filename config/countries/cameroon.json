@@ -1,0 +1,38 @@
+{
+  "name": "Cameroon",
+  "acled_country_code": "CMR",
+  "iso3": "CMR",
+  "polity_code": -4,
+  "polity_category": "closed_anocracy",
+  "infant_mortality_per_1000": 48.0,
+  "gdp_per_capita_usd": 1661,
+  "population_millions": 28.6,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 2,
+  "neighboring_countries": ["NGA", "TCD", "CAF", "COG", "GAB", "GNQ"],
+  "v_dem_liberal_democracy_index": 0.10,
+  "v_dem_electoral_democracy_index": 0.14,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "President Paul Biya",
+    "Anglophone separatists (Ambazonia)",
+    "Boko Haram (Far North)",
+    "Military",
+    "Opposition (Maurice Kamto/MRC)"
+  ],
+  "risk_context": "Aging President Biya (91) creates succession uncertainty. Anglophone crisis in Northwest/Southwest regions with armed separatists. Boko Haram spillover in Far North. Suppressed political opposition. French military presence.",
+  "news_sources_rss": [
+    "https://www.journalducameroun.com/en/feed",
+    "https://cameroon-tribune.cm/feed",
+    "https://www.cameroonmagazine.com/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

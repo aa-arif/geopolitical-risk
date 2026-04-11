@@ -1,0 +1,38 @@
+{
+  "name": "Yemen",
+  "acled_country_code": "YEM",
+  "iso3": "YEM",
+  "polity_code": -2,
+  "polity_category": "anocracy",
+  "infant_mortality_per_1000": 43.0,
+  "gdp_per_capita_usd": 585,
+  "population_millions": 34.4,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["SAU", "OMN"],
+  "v_dem_liberal_democracy_index": 0.04,
+  "v_dem_electoral_democracy_index": 0.06,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "Ansar Allah (Houthis)",
+    "Presidential Leadership Council",
+    "Saudi Arabia",
+    "UAE",
+    "Iran (Houthi supporter)"
+  ],
+  "risk_context": "Protracted civil war with fragile truce. Houthis control northern population centers including Sanaa. Red Sea shipping attacks created international crisis. Saudi-Iran detente shifted dynamics but no peace deal.",
+  "news_sources_rss": [
+    "https://www.middleeasteye.net/rss",
+    "https://sanaacenter.org/feed",
+    "https://www.aljazeera.com/tag/yemen/rss"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

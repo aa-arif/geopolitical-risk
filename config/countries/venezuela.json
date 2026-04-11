@@ -1,0 +1,38 @@
+{
+  "name": "Venezuela",
+  "acled_country_code": "VEN",
+  "iso3": "VEN",
+  "polity_code": -3,
+  "polity_category": "closed_anocracy",
+  "infant_mortality_per_1000": 14.0,
+  "gdp_per_capita_usd": 3740,
+  "population_millions": 28.4,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["COL", "BRA", "GUY"],
+  "v_dem_liberal_democracy_index": 0.06,
+  "v_dem_electoral_democracy_index": 0.09,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "President Nicolas Maduro",
+    "Opposition (Maria Corina Machado)",
+    "Military high command",
+    "PDVSA (state oil)",
+    "Colombia (migration pressure)"
+  ],
+  "risk_context": "Authoritarian consolidation after disputed 2024 election. Opposition leader under persecution. Massive diaspora crisis affecting region. Oil sector partially recovered under sanctions relief. US sanctions and diplomatic pressure ongoing.",
+  "news_sources_rss": [
+    "https://www.caracaschronicles.com/feed",
+    "https://efectococuyo.com/feed",
+    "https://www.elnacional.com/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

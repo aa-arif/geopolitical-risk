@@ -97,6 +97,21 @@ _ISO3_TO_COUNTRY_NAME = {
     "THA": "Thailand",
     "KEN": "Kenya",
     "UKR": "Ukraine",
+    "SOM": "Somalia",
+    "YEM": "Yemen",
+    "AFG": "Afghanistan",
+    "LBY": "Libya",
+    "MLI": "Mali",
+    "MOZ": "Mozambique",
+    "VEN": "Venezuela",
+    "HTI": "Haiti",
+    "LBN": "Lebanon",
+    "ZAF": "South Africa",
+    "IND": "India",
+    "MEX": "Mexico",
+    "NER": "Niger",
+    "CMR": "Cameroon",
+    "TCD": "Chad",
 }
 
 

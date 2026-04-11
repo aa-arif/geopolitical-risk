@@ -42,6 +42,9 @@ COUNTRIES = [
     "nigeria", "bangladesh", "pakistan", "philippines", "turkey",
     "ethiopia", "myanmar", "iraq", "colombia", "sudan",
     "cod", "egypt", "thailand", "kenya", "ukraine",
+    "somalia", "yemen", "afghanistan", "libya", "mali",
+    "mozambique", "venezuela", "haiti", "lebanon", "southafrica",
+    "india", "mexico", "niger", "cameroon", "chad",
 ]
 
 # --- Prompt Versions ---

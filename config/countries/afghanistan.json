@@ -1,0 +1,38 @@
+{
+  "name": "Afghanistan",
+  "acled_country_code": "AFG",
+  "iso3": "AFG",
+  "polity_code": -7,
+  "polity_category": "autocracy",
+  "infant_mortality_per_1000": 45.0,
+  "gdp_per_capita_usd": 380,
+  "population_millions": 42.0,
+  "terrain_ruggedness": "very_high",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["PAK", "IRN", "TKM", "UZB", "TJK", "CHN"],
+  "v_dem_liberal_democracy_index": 0.03,
+  "v_dem_electoral_democracy_index": 0.04,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "Taliban (Islamic Emirate)",
+    "ISIS-K",
+    "National Resistance Front",
+    "China (economic engagement)",
+    "Pakistan (border tensions)"
+  ],
+  "risk_context": "Taliban consolidated control since 2021. ISIS-K conducts attacks despite Taliban crackdown. Severe humanitarian crisis with collapsed economy. Women's rights rollback drew international condemnation and aid restrictions.",
+  "news_sources_rss": [
+    "https://tolonews.com/rss",
+    "https://www.khaama.com/feed",
+    "https://8am.media/eng/feed"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

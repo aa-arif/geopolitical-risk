@@ -1,0 +1,38 @@
+{
+  "name": "Libya",
+  "acled_country_code": "LBY",
+  "iso3": "LBY",
+  "polity_code": 0,
+  "polity_category": "anocracy",
+  "infant_mortality_per_1000": 10.0,
+  "gdp_per_capita_usd": 6357,
+  "population_millions": 7.0,
+  "terrain_ruggedness": "low",
+  "years_since_last_instability": 1,
+  "neighboring_countries": ["TUN", "DZA", "NER", "TCD", "SDN", "EGY"],
+  "v_dem_liberal_democracy_index": 0.07,
+  "v_dem_electoral_democracy_index": 0.10,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "PM Abdul Hamid Dbeibah (GNU Tripoli)",
+    "Khalifa Haftar (LNA East)",
+    "Turkey (GNA backer)",
+    "Russia/Wagner (LNA backer)",
+    "Oil National Corporation"
+  ],
+  "risk_context": "Divided between Tripoli-based government and eastern forces under Haftar. Stalled elections perpetuate dual governance. Oil revenues are primary conflict driver. Foreign military presence from Turkey and Russia.",
+  "news_sources_rss": [
+    "https://www.libyaherald.com/feed",
+    "https://libyaobserver.ly/feed",
+    "https://www.middleeasteye.net/rss"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "name": "Niger",
+  "acled_country_code": "NER",
+  "iso3": "NER",
+  "polity_code": -5,
+  "polity_category": "closed_anocracy",
+  "infant_mortality_per_1000": 44.0,
+  "gdp_per_capita_usd": 591,
+  "population_millions": 27.2,
+  "terrain_ruggedness": "moderate",
+  "years_since_last_instability": 0,
+  "neighboring_countries": ["DZA", "LBY", "TCD", "NGA", "BEN", "BFA", "MLI"],
+  "v_dem_liberal_democracy_index": 0.06,
+  "v_dem_electoral_democracy_index": 0.08,
+  "gpr_country_variant": false,
+  "key_actors": [
+    "Military junta (Gen. Abdourahamane Tchiani)",
+    "JNIM jihadists",
+    "ISGS (Islamic State)",
+    "Russia/Africa Corps",
+    "France (expelled)"
+  ],
+  "risk_context": "Military coup in July 2023 overthrew elected president. Junta expelled French forces and joined Sahel alliance with Mali and Burkina Faso. Jihadist activity expanding. US forced to close drone base. Uranium mining relevance for global nuclear supply.",
+  "news_sources_rss": [
+    "https://www.actuniger.com/feed",
+    "https://nigerinter.com/feed",
+    "https://www.jeuneafrique.com/feeds/rss/"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

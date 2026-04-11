@@ -1,0 +1,38 @@
+{
+  "name": "India",
+  "acled_country_code": "IND",
+  "iso3": "IND",
+  "polity_code": 7,
+  "polity_category": "democracy",
+  "infant_mortality_per_1000": 25.0,
+  "gdp_per_capita_usd": 2485,
+  "population_millions": 1428.6,
+  "terrain_ruggedness": "high",
+  "years_since_last_instability": 4,
+  "neighboring_countries": ["PAK", "CHN", "NPL", "BTN", "BGD", "MMR", "LKA"],
+  "v_dem_liberal_democracy_index": 0.28,
+  "v_dem_electoral_democracy_index": 0.36,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "PM Narendra Modi (BJP)",
+    "Congress/INDIA alliance",
+    "Indian military",
+    "RSS (Rashtriya Swayamsevak Sangh)",
+    "Naxalite insurgency (declining)"
+  ],
+  "risk_context": "World's largest democracy under BJP dominance with democratic backsliding concerns. Hindu-Muslim communal tensions periodic. Kashmir and northeastern insurgencies. Border standoffs with China and Pakistan. Major economic growth but inequality rising.",
+  "news_sources_rss": [
+    "https://theprint.in/feed",
+    "https://scroll.in/rss/all",
+    "https://www.ndtv.com/rss/top-stories"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}
