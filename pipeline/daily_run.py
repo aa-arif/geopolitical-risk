@@ -14,6 +14,7 @@ Runs all system components in order:
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 
 from config.settings import (
@@ -194,20 +195,23 @@ def run_country(country_name: str) -> dict:
 
 
 def run_all():
-    """Run the pipeline for all target countries."""
-    logger.info("Starting daily pipeline run at %s",
-                datetime.now(timezone.utc).isoformat())
+    """Run the pipeline for all target countries in parallel (3 workers)."""
+    logger.info("Starting daily pipeline run at %s (%d countries, 3 workers)",
+                datetime.now(timezone.utc).isoformat(), len(COUNTRIES))
 
     initialize_db()
     results = []
 
-    for country in COUNTRIES:
-        try:
-            result = run_country(country)
-            results.append(result)
-        except Exception as e:
-            logger.error("Pipeline failed for %s: %s", country, e, exc_info=True)
-            results.append({"country": country, "error": str(e)})
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = {pool.submit(run_country, country): country for country in COUNTRIES}
+        for future in as_completed(futures):
+            country = futures[future]
+            try:
+                result = future.result()
+                results.append(result)
+            except Exception as e:
+                logger.error("Pipeline failed for %s: %s", country, e, exc_info=True)
+                results.append({"country": country, "error": str(e)})
 
     logger.info("Daily pipeline complete. %d/%d countries processed.",
                 sum(1 for r in results if "error" not in r), len(COUNTRIES))
