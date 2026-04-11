@@ -527,7 +527,7 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
     return count
 
 
-def ingest_all(country_config: dict) -> dict:
+def ingest_all(country_config: dict, skip_gdelt: bool = False) -> dict:
     """Run all ingestion for a single country. Returns counts."""
     iso3 = country_config["iso3"]
 
@@ -537,10 +537,16 @@ def ingest_all(country_config: dict) -> dict:
     if newsapi_count < 5:
         rss_count = ingest_rss(country_config)
 
+    gdelt_art = 0
+    gdelt_ev = 0
+    if not skip_gdelt:
+        gdelt_art = ingest_gdelt(country_config)
+        gdelt_ev = ingest_gdelt_events(country_config)
+
     return {
         "acled": ingest_acled(iso3),
         "newsapi": newsapi_count,
         "rss": rss_count,
-        "gdelt_articles": ingest_gdelt(country_config),
-        "gdelt_events": ingest_gdelt_events(country_config),
+        "gdelt_articles": gdelt_art,
+        "gdelt_events": gdelt_ev,
     }

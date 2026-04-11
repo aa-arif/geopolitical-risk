@@ -31,7 +31,7 @@ from utils.db import (
 from utils.logger import logger, compute_data_hash, log_prediction
 from utils.api_client import MODELS
 
-from pipeline.ingest import ingest_all
+from pipeline.ingest import ingest_all, ingest_gdelt, ingest_gdelt_events
 from track_a.predict import predict_track_a
 from track_b.filter import is_relevant, compute_reliability_tier
 from track_b.extraction import extract_and_store, summarize_reasoning_chains
@@ -45,7 +45,7 @@ from evaluation.brier import brier_score
 from evaluation.resolve import resolve_expired_predictions
 
 
-def run_country(country_name: str) -> dict:
+def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
     """
     Run the full prediction pipeline for a single country.
 
@@ -61,7 +61,7 @@ def run_country(country_name: str) -> dict:
 
     # --- Step 1: Ingest ---
     logger.info("[1/8] Ingesting data for %s...", iso3)
-    ingest_counts = ingest_all(country_config)
+    ingest_counts = ingest_all(country_config, skip_gdelt=skip_gdelt)
     logger.info("Ingestion: ACLED=%d, NewsAPI=%d, RSS=%d, GDELT_art=%d, GDELT_ev=%d",
                 ingest_counts["acled"], ingest_counts.get("newsapi", 0),
                 ingest_counts.get("rss", 0),
@@ -216,15 +216,37 @@ def run_country(country_name: str) -> dict:
 
 
 def run_all():
-    """Run the pipeline for all target countries in parallel (3 workers)."""
-    logger.info("Starting daily pipeline run at %s (%d countries, 3 workers)",
+    """
+    Run the pipeline for all target countries.
+    Phase 1: Sequential GDELT pre-seeding (avoids rate limiting).
+    Phase 2: Parallel pipeline with 3 workers (GDELT skipped).
+    """
+    logger.info("Starting daily pipeline run at %s (%d countries)",
                 datetime.now(timezone.utc).isoformat(), len(COUNTRIES))
 
     initialize_db()
+
+    # --- Phase 1: Sequential GDELT pre-seeding ---
+    logger.info("Phase 1: Sequential GDELT ingestion for %d countries...", len(COUNTRIES))
+    for country_name in COUNTRIES:
+        try:
+            cfg = load_country_config(country_name)
+            g_art = ingest_gdelt(cfg, days=7)
+            g_ev = ingest_gdelt_events(cfg, days=7)
+            logger.info("GDELT pre-seed %s: articles=%d, events=%d",
+                        cfg["iso3"], g_art, g_ev)
+        except Exception as e:
+            logger.warning("GDELT pre-seed failed for %s: %s", country_name, e)
+
+    # --- Phase 2: Parallel pipeline (skip GDELT, already done) ---
+    logger.info("Phase 2: Parallel pipeline (3 workers, GDELT skipped)...")
     results = []
 
     with ThreadPoolExecutor(max_workers=3) as pool:
-        futures = {pool.submit(run_country, country): country for country in COUNTRIES}
+        futures = {
+            pool.submit(run_country, country, skip_gdelt=True): country
+            for country in COUNTRIES
+        }
         for future in as_completed(futures):
             country = futures[future]
             try:
