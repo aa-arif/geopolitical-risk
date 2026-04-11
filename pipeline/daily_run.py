@@ -238,23 +238,18 @@ def run_all():
         except Exception as e:
             logger.warning("GDELT pre-seed failed for %s: %s", country_name, e)
 
-    # --- Phase 2: Parallel pipeline (skip GDELT, already done) ---
-    logger.info("Phase 2: Parallel pipeline (3 workers, GDELT skipped)...")
+    # --- Phase 2: Sequential pipeline (skip GDELT, already done) ---
+    logger.info("Phase 2: Sequential pipeline for %d countries (GDELT skipped)...",
+                len(COUNTRIES))
     results = []
 
-    with ThreadPoolExecutor(max_workers=3) as pool:
-        futures = {
-            pool.submit(run_country, country, skip_gdelt=True): country
-            for country in COUNTRIES
-        }
-        for future in as_completed(futures):
-            country = futures[future]
-            try:
-                result = future.result()
-                results.append(result)
-            except Exception as e:
-                logger.error("Pipeline failed for %s: %s", country, e, exc_info=True)
-                results.append({"country": country, "error": str(e)})
+    for country in COUNTRIES:
+        try:
+            result = run_country(country, skip_gdelt=True)
+            results.append(result)
+        except Exception as e:
+            logger.error("Pipeline failed for %s: %s", country, e, exc_info=True)
+            results.append({"country": country, "error": str(e)})
 
     logger.info("Daily pipeline complete. %d/%d countries processed.",
                 sum(1 for r in results if "error" not in r), len(COUNTRIES))
