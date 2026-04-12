@@ -24,11 +24,21 @@ _GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "data_gpr_export.xls"
 # Placeholder values used when Excel is unavailable.
 # Scale: -1.0 (declining risk) to +1.0 (rising risk), 0.0 = stable
 _FALLBACK_TRENDS = {
-    "NGA": 0.3,   # Elevated due to security situation, US tensions
+    "NGA": 0.3,   # Security situation, banditry, US tensions
     "BGD": 0.5,   # Post-crisis political uncertainty
     "PAK": 0.4,   # PTI crackdown, TTP escalation
-    "PHL": 0.1,   # Moderate, Marcos-Duterte tension rising
+    "PHL": 0.1,   # Moderate, Marcos-Duterte tension
     "TUR": 0.4,   # Imamoglu arrest, opposition crackdown
+    "ETH": 0.3,   # Post-Tigray fragility, Amhara/Oromia tensions
+    "MMR": 0.6,   # Active civil war, junta vs resistance
+    "IRQ": 0.1,   # Relative stability, militia tensions
+    "COL": 0.2,   # Peace process stalling, ELN/FARC remnants
+    "SDN": 0.8,   # Active civil war, RSF vs SAF
+    "UKR": 0.7,   # Active international war
+    "SOM": 0.5,   # Al-Shabaab, clan conflict, state fragility
+    "YEM": 0.4,   # Ceasefire fragile, Houthi situation
+    "EGY": 0.2,   # Economic stress, stable autocracy
+    "KEN": 0.2,   # Post-protest recovery, fiscal austerity tensions
 }
 
 # Cache for loaded GPR data: {iso3: [(datetime, value), ...]}
