@@ -156,6 +156,15 @@ def summarize_reasoning_chains(chains: list) -> str:
     summary_parts = []
     if all_factors:
         summary_parts.append("CAUSAL FACTORS (from recent reporting):")
+        # Sort by confidence (higher first) before deduplication
+        def _extract_confidence(line):
+            try:
+                idx = line.index("confidence: ")
+                return float(line[idx + 12:idx + 15])
+            except (ValueError, IndexError):
+                return 0.5
+        all_factors.sort(key=_extract_confidence, reverse=True)
+
         seen = set()
         unique_factors = []
         for f in all_factors:
@@ -163,10 +172,10 @@ def summarize_reasoning_chains(chains: list) -> str:
             if key not in seen:
                 seen.add(key)
                 unique_factors.append(f)
-        summary_parts.extend(unique_factors[:25])
+        summary_parts.extend(unique_factors[:40])
 
     if all_counterargs:
         summary_parts.append("\nCOUNTERARGUMENTS:")
-        summary_parts.extend(all_counterargs[:5])
+        summary_parts.extend(all_counterargs[:10])
 
     return "\n".join(summary_parts)
