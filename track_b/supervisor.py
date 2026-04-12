@@ -46,7 +46,8 @@ def _extract_reasoning_text(agent_result: dict) -> str:
 
 
 def reconcile(country_config: dict, track_a_result: dict,
-              ensemble_results: list) -> dict:
+              ensemble_results: list, reasoning_summary: str = "",
+              acled_data: dict = None) -> dict:
     """
     Reconcile 4 agent forecasts into a single Track B probability.
 
@@ -56,6 +57,8 @@ def reconcile(country_config: dict, track_a_result: dict,
         country_config: Country configuration
         track_a_result: Track A structural prediction
         ensemble_results: List of 4 agent forecast dicts
+        reasoning_summary: Full reasoning chain summary text
+        acled_data: ACLED event summary dict
 
     Returns:
         Supervisor reconciliation result with final_probability
@@ -66,9 +69,33 @@ def reconcile(country_config: dict, track_a_result: dict,
     agents = ensemble_results + [{"final_probability": 0.15, "agent_type": "missing"}] * 4
     agents = agents[:4]
 
+    # Format Track A breakdown
+    components = track_a_result.get("components", {})
+    track_a_breakdown = (
+        f"PITF base probability: {components.get('pitf_base', 0)*100:.1f}%\n"
+        f"Structural vulnerability: {components.get('structural_vulnerability', 0):.3f}\n"
+        f"Neighborhood contagion: {components.get('neighborhood_contagion', 0):.3f}\n"
+        f"GPR trend: {components.get('gpr_trend', 0):+.2f} ({components.get('gpr_trend_description', 'N/A')})\n"
+        f"ACLED monthly avg: {components.get('acled_avg_monthly', 0):.0f} events\n"
+        f"ACLED floor applied: {components.get('acled_floor_applied', 0)*100:.0f}%"
+    )
+
+    # Format ACLED summary
+    acled_text = "No ACLED data available."
+    if acled_data and acled_data.get("total_events", 0) > 0:
+        acled_text = (
+            f"Total events (last {acled_data.get('period_days', 30)} days): "
+            f"{acled_data['total_events']}, Fatalities: {acled_data.get('total_fatalities', 0)}"
+        )
+        for entry in acled_data.get("by_type", [])[:5]:
+            acled_text += f"\n  {entry['event_type']}: {entry['count']} events"
+
     prompt = template.format(
         country_name=country_config["name"],
         track_a_probability=f"{track_a_result['probability'] * 100:.1f}",
+        track_a_breakdown=track_a_breakdown,
+        acled_summary=acled_text,
+        reasoning_chains_summary=reasoning_summary or "No causal factors extracted.",
         agent_1_probability=f"{agents[0]['final_probability'] * 100:.1f}",
         agent_1_reasoning=_extract_reasoning_text(agents[0]),
         agent_2_probability=f"{agents[1]['final_probability'] * 100:.1f}",

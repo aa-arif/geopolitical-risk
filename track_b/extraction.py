@@ -132,23 +132,26 @@ def summarize_reasoning_chains(chains: list) -> str:
             direction = factor.get("direction", "increases_risk")
             confidence = factor.get("confidence", 0.5)
             mechanism = factor.get("mechanism", "")
+            evidence = factor.get("evidence", "")
             symbol = "+" if direction == "increases_risk" else "-"
-            line = (
-                f"  [{symbol}] {factor.get('factor', 'unknown')} "
-                f"(confidence: {confidence:.1f}"
-            )
+            line = f"  [{symbol}] {factor.get('factor', 'unknown')} (confidence: {confidence:.1f})"
             if mechanism:
-                line += f", mechanism: {mechanism[:80]}"
-            line += f", evidence: {factor.get('evidence', 'N/A')[:100]})"
+                line += f"\n      Mechanism: {mechanism}"
+            if evidence:
+                line += f"\n      Evidence: {evidence}"
             all_factors.append(line)
 
         for ca in chain_data.get("counterarguments", []):
             if isinstance(ca, dict):
                 arg = ca.get("argument", "")
                 strength = ca.get("strength", "")
-                all_counterargs.append(f"  - [{strength}] {arg[:150]}")
+                evidence = ca.get("evidence", "")
+                line = f"  - [{strength}] {arg}"
+                if evidence:
+                    line += f" (evidence: {evidence})"
+                all_counterargs.append(line)
             elif isinstance(ca, str):
-                all_counterargs.append(f"  - {ca[:150]}")
+                all_counterargs.append(f"  - {ca}")
 
     summary_parts = []
     if all_factors:
@@ -160,7 +163,7 @@ def summarize_reasoning_chains(chains: list) -> str:
             if key not in seen:
                 seen.add(key)
                 unique_factors.append(f)
-        summary_parts.extend(unique_factors[:12])
+        summary_parts.extend(unique_factors[:25])
 
     if all_counterargs:
         summary_parts.append("\nCOUNTERARGUMENTS:")

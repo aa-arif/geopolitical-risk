@@ -6,6 +6,9 @@ OUTSIDE VIEW ANCHOR: The structural model estimates P = {track_a_probability}%.
 
 CURRENT CONSENSUS: Based on initial analysis, the emerging consensus is that instability risk is {consensus_direction} (approximately {preliminary_average}%).
 
+AGENT REASONING TO CHALLENGE:
+{agent_reasoning}
+
 CURRENT SITUATION SUMMARY:
 {reasoning_chains_summary}
 

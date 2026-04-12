@@ -114,11 +114,31 @@ def forecast_devil(country_config: dict, track_a_result: dict,
     avg = sum(probs) / len(probs) if probs else prob
     direction = "elevated" if avg > 0.3 else "moderate" if avg > 0.15 else "low"
 
+    # Build detailed agent reasoning for the devil to challenge
+    agent_lines = []
+    for f in preliminary_forecasts:
+        atype = f.get("agent_type", "unknown")
+        ap = f.get("final_probability", 0)
+        agent_lines.append(f"Agent ({atype}): P={ap*100:.1f}%")
+        if atype == "baserate":
+            for adj in f.get("upward_adjustments", [])[:3]:
+                agent_lines.append(f"  UP: {adj.get('factor','')} (+{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:120]}")
+            for adj in f.get("downward_adjustments", [])[:3]:
+                agent_lines.append(f"  DOWN: {adj.get('factor','')} (-{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:120]}")
+        elif atype == "analogy":
+            for a in f.get("analogies", [])[:3]:
+                agent_lines.append(f"  Analogy: {a.get('country','?')} {a.get('year','?')} - {a.get('outcome','')[:100]}")
+        elif atype == "decomposition":
+            for sq in f.get("sub_questions", [])[:4]:
+                agent_lines.append(f"  SubQ: {sq.get('question','')[:80]} -> P={sq.get('probability',0):.0%}")
+    agent_reasoning = "\n".join(agent_lines) if agent_lines else "No detailed reasoning available."
+
     prompt = template.format(
         country_name=country_config["name"],
         track_a_probability=f"{prob * 100:.1f}",
         consensus_direction=direction,
         preliminary_average=f"{avg * 100:.1f}",
+        agent_reasoning=agent_reasoning,
         reasoning_chains_summary=reasoning_summary,
     )
 

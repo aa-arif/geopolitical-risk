@@ -146,7 +146,9 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
 
     # --- Step 5: Supervisor Reconciliation ---
     logger.info("[5/8] Running supervisor reconciliation...")
-    supervisor_result = reconcile(country_config, track_a, ensemble_results)
+    supervisor_result = reconcile(country_config, track_a, ensemble_results,
+                                   reasoning_summary=reasoning_summary,
+                                   acled_data=acled_data)
     track_b_prob = supervisor_result["final_probability"]
 
     # --- Step 6: Fuse & Calibrate ---

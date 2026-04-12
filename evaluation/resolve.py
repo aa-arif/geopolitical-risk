@@ -28,7 +28,7 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
     if country_iso3:
         cursor = conn.execute(
             """SELECT id, country_iso3, prediction_date, window_end_date,
-                      calibrated_probability
+                      calibrated_probability, event_threshold
                FROM predictions
                WHERE resolved = FALSE AND window_end_date <= ?
                AND country_iso3 = ?""",
@@ -37,7 +37,7 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
     else:
         cursor = conn.execute(
             """SELECT id, country_iso3, prediction_date, window_end_date,
-                      calibrated_probability
+                      calibrated_probability, event_threshold
                FROM predictions
                WHERE resolved = FALSE AND window_end_date <= ?""",
             (now,),
@@ -56,8 +56,8 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         window_end = pred["window_end_date"]
         calibrated_p = pred["calibrated_probability"]
 
-        # Try ACLED first
-        threshold = compute_event_threshold(conn, iso3, months=12)
+        # Use stored threshold, fall back to recomputation for old predictions
+        threshold = pred.get("event_threshold") or compute_event_threshold(conn, iso3, months=12)
         acled_cursor = conn.execute(
             """SELECT COUNT(*) as cnt FROM acled_events
                WHERE country_iso3 = ?

@@ -18,15 +18,8 @@ from utils.logger import logger
 
 _GPR_DATA_PATH = Path(__file__).parent.parent / "data" / "data_gpr_export.xls"
 
-# ISO3 -> GPR column names. Caldara-Iacoviello covers 44 countries;
-# Nigeria, Bangladesh, Pakistan are NOT in the dataset.
-# Philippines (GPRC_PHL) and Turkey (GPRC_TUR) are covered.
-_ISO3_TO_GPR_PATTERNS = {
-    "PHL": ["GPRC_PHL"],
-    "TUR": ["GPRC_TUR"],
-    # Not in GPR dataset -- will use fallback placeholders:
-    # NGA, BGD, PAK
-}
+# GPR column mapping is built dynamically from the Excel file.
+# All GPRC_XXX columns are auto-detected during load.
 
 # Placeholder values used when Excel is unavailable.
 # Scale: -1.0 (declining risk) to +1.0 (rising risk), 0.0 = stable
@@ -43,17 +36,8 @@ _gpr_cache = None
 _gpr_columns_found = None
 
 
-def _find_column(columns, patterns):
-    """Find the matching column name from a list of patterns."""
-    for pattern in patterns:
-        for col in columns:
-            if pattern.lower() == col.lower() or pattern.lower() in col.lower():
-                return col
-    return None
-
-
 def _load_gpr_data():
-    """Load GPR Excel data into memory using pandas."""
+    """Load GPR Excel data into memory using pandas. Auto-detects all GPRC_ columns."""
     global _gpr_cache, _gpr_columns_found
     if _gpr_cache is not None:
         return _gpr_cache
@@ -72,7 +56,6 @@ def _load_gpr_data():
 
         df = pd.read_excel(_GPR_DATA_PATH)
         logger.info("GPR Excel loaded: %d rows, %d columns", len(df), len(df.columns))
-        logger.info("GPR columns: %s", list(df.columns))
 
         # Find the date column
         date_col = None
@@ -81,26 +64,25 @@ def _load_gpr_data():
                 date_col = candidate
                 break
         if date_col is None:
-            # Try first column
             date_col = df.columns[0]
-            logger.info("Using first column as date: %s", date_col)
 
         df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
         df = df.dropna(subset=[date_col]).sort_values(date_col)
 
-        # Build per-country series
+        # Auto-detect all GPRC_ columns and extract ISO3 suffix
         data = {}
         _gpr_columns_found = {}
-        for iso3, patterns in _ISO3_TO_GPR_PATTERNS.items():
-            col = _find_column(df.columns.tolist(), patterns)
-            if col:
-                series = df[[date_col, col]].dropna()
+        gprc_cols = [c for c in df.columns if c.startswith("GPRC_")]
+        logger.info("GPR: Found %d country columns: %s", len(gprc_cols),
+                     [c.replace("GPRC_", "") for c in gprc_cols])
+
+        for col in gprc_cols:
+            iso3 = col.replace("GPRC_", "")
+            series = df[[date_col, col]].dropna()
+            if len(series) > 0:
                 data[iso3] = list(zip(series[date_col].tolist(),
                                        series[col].astype(float).tolist()))
                 _gpr_columns_found[iso3] = col
-                logger.info("GPR: %s -> column '%s' (%d data points)", iso3, col, len(data[iso3]))
-            else:
-                logger.warning("GPR: No column found for %s (tried %s)", iso3, patterns)
 
         _gpr_cache = data
         return _gpr_cache
