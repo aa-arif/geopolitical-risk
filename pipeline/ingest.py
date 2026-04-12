@@ -188,10 +188,16 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
     for ev in all_events:
         try:
             conn.execute(
-                """INSERT OR IGNORE INTO acled_events
+                """INSERT INTO acled_events
                    (country_iso3, event_date, event_type, sub_event_type,
                     fatalities, latitude, longitude, source, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(country_iso3, event_date, event_type,
+                               sub_event_type, latitude, longitude)
+                   DO UPDATE SET
+                       fatalities = excluded.fatalities,
+                       notes = excluded.notes,
+                       source = excluded.source""",
                 (
                     country_iso3,
                     ev.get("event_date", ""),
