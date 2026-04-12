@@ -234,7 +234,7 @@ def run_all():
     """
     Run the pipeline for all target countries.
     Phase 1: Sequential GDELT pre-seeding (avoids rate limiting).
-    Phase 2: Parallel pipeline with 3 workers (GDELT skipped).
+    Phase 2: Sequential pipeline for all countries (GDELT skipped).
     """
     logger.info("Starting daily pipeline run at %s (%d countries)",
                 datetime.now(timezone.utc).isoformat(), len(COUNTRIES))
