@@ -1,0 +1,168 @@
+"""
+Weekly digest generator for Substack / newsletter distribution.
+Produces a markdown report summarizing the past 7 days of predictions.
+
+Usage:
+    python -m pipeline.weekly_digest
+"""
+
+import json
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from config.settings import COUNTRIES, load_country_config
+from utils.db import get_connection, initialize_db, get_prediction_history
+
+
+def _risk_level(prob):
+    if prob >= 0.5: return "CRITICAL"
+    elif prob >= 0.3: return "HIGH"
+    elif prob >= 0.15: return "ELEVATED"
+    return "LOW"
+
+
+def generate_weekly_digest(conn) -> str:
+    """Generate a full weekly digest in markdown format."""
+    now = datetime.now(timezone.utc)
+    week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+
+    lines = [
+        f"# Precursion Weekly Risk Digest",
+        f"**{week_ago} to {today}**",
+        "",
+        "---",
+        "",
+    ]
+
+    # Collect current predictions and 7-day changes
+    country_data = []
+    for country_name in COUNTRIES:
+        config = load_country_config(country_name)
+        iso3 = config["iso3"]
+        history = get_prediction_history(conn, iso3, limit=14)
+
+        if not history:
+            continue
+
+        current = history[0]
+        curr_p = current["calibrated_probability"]
+        curr_a = current["track_a_probability"]
+        curr_b = current["track_b_probability"]
+        reasoning = json.loads(current["reasoning_summary"]) if current["reasoning_summary"] else {}
+
+        # Find prediction from ~7 days ago
+        prev_p = None
+        for h in history[1:]:
+            if h["prediction_date"] <= week_ago:
+                prev_p = h["calibrated_probability"]
+                break
+        if prev_p is None and len(history) > 1:
+            prev_p = history[-1]["calibrated_probability"]
+
+        delta = (curr_p - prev_p) * 100 if prev_p is not None else 0
+
+        country_data.append({
+            "name": config["name"],
+            "iso3": iso3,
+            "probability": curr_p,
+            "track_a": curr_a,
+            "track_b": curr_b,
+            "risk_level": _risk_level(curr_p),
+            "delta": delta,
+            "prev": prev_p,
+            "exec_summary": reasoning.get("executive_summary", ""),
+            "narrative": reasoning.get("supervisor", ""),
+            "confidence": reasoning.get("confidence", ""),
+        })
+
+    country_data.sort(key=lambda x: -x["probability"])
+
+    # --- Ranked List ---
+    lines.append("## Current Risk Rankings")
+    lines.append("")
+    lines.append("| Rank | Country | Probability | Level | 7-Day Change |")
+    lines.append("|------|---------|-------------|-------|--------------|")
+    for i, c in enumerate(country_data, 1):
+        delta_str = f"{c['delta']:+.1f}pp" if c["prev"] is not None else "new"
+        lines.append(f"| {i} | **{c['name']}** | {c['probability']:.0%} | {c['risk_level']} | {delta_str} |")
+    lines.append("")
+
+    # --- Biggest Movers ---
+    movers = sorted(country_data, key=lambda x: abs(x["delta"]), reverse=True)
+    movers = [m for m in movers if abs(m["delta"]) > 1.0][:5]
+
+    if movers:
+        lines.append("## Biggest Movers This Week")
+        lines.append("")
+        for m in movers:
+            direction = "rose" if m["delta"] > 0 else "fell"
+            explanation = m["exec_summary"][:200] if m["exec_summary"] else m["narrative"][:200] if m["narrative"] else ""
+            lines.append(f"- **{m['name']}** {direction} {abs(m['delta']):.1f}pp to {m['probability']:.0%}. {explanation}")
+        lines.append("")
+
+    # --- Spotlight ---
+    spotlight = country_data[:3]
+    lines.append("## Spotlight: Highest Risk Countries")
+    lines.append("")
+    for c in spotlight:
+        summary = c["exec_summary"] or c["narrative"]
+        if summary:
+            summary = summary[:300]
+        else:
+            summary = f"Track A structural probability: {c['track_a']:.0%}. Track B LLM ensemble: {c['track_b']:.0%}."
+        lines.append(f"### {c['name']} ({c['probability']:.0%} {c['risk_level']})")
+        lines.append(f"{summary}")
+        lines.append("")
+
+    # --- Track A vs B Divergence ---
+    divergent = [c for c in country_data
+                 if c["track_a"] and c["track_b"]
+                 and abs(c["track_a"] - c["track_b"]) > 0.10]
+    if divergent:
+        lines.append("## Track A vs Track B Divergence")
+        lines.append("")
+        lines.append("Countries where structural model and LLM ensemble disagree by >10pp:")
+        lines.append("")
+        for c in divergent:
+            higher = "Track A" if c["track_a"] > c["track_b"] else "Track B"
+            diff = abs(c["track_a"] - c["track_b"]) * 100
+            lines.append(f"- **{c['name']}**: Track A {c['track_a']:.0%} vs Track B {c['track_b']:.0%} ({higher} higher by {diff:.0f}pp)")
+        lines.append("")
+
+    # --- Methodology ---
+    lines.append("---")
+    lines.append("")
+    lines.append("*Predictions generated by the Precursion dual-track forecasting system. "
+                 "Track A: PITF structural model calibrated on published political science research. "
+                 "Track B: LLM causal reasoning ensemble with 4 independent forecasting agents. "
+                 "Probabilities represent 30-day instability risk (protest/unrest exceeding 90th "
+                 "percentile, coup attempt, or adverse regime change).*")
+
+    return "\n".join(lines)
+
+
+def main():
+    initialize_db()
+    conn = get_connection()
+
+    digest = generate_weekly_digest(conn)
+
+    # Save to file
+    digest_dir = Path("data/digests")
+    digest_dir.mkdir(parents=True, exist_ok=True)
+    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    path = digest_dir / f"weekly_{date_str}.md"
+    path.write_text(digest, encoding="utf-8")
+
+    print(digest)
+    print(f"\nSaved to {path}")
+
+    conn.close()
+
+
+if __name__ == "__main__":
+    main()

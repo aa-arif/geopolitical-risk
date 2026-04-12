@@ -16,3 +16,4 @@ frontend/dist/
 session.txt
 .claude/
 data/pipeline_logs/
+.gitnexus

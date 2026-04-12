@@ -128,6 +128,17 @@ def initialize_db():
         CREATE INDEX IF NOT EXISTS idx_gdelt_conflict_country_date
             ON gdelt_conflict_events(country_iso3, event_date);
 
+        CREATE TABLE IF NOT EXISTS change_alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_iso3 TEXT NOT NULL,
+            alert_date TEXT NOT NULL,
+            previous_probability REAL,
+            current_probability REAL,
+            delta REAL,
+            alert_text TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
         CREATE TABLE IF NOT EXISTS evaluations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             evaluation_date TEXT NOT NULL,

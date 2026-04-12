@@ -247,6 +247,30 @@ def get_track_comparison():
     return comparison
 
 
+@app.get("/evaluation/learning")
+def get_learning():
+    from evaluation.learning import analyze_factor_predictiveness, analyze_agent_accuracy
+    conn = get_connection()
+    factors = analyze_factor_predictiveness(conn)
+    agents = analyze_agent_accuracy(conn)
+    conn.close()
+    return {"factors": factors, "agents": agents}
+
+
+@app.get("/alerts")
+def get_alerts(days: int = 30):
+    conn = get_connection()
+    cursor = conn.execute(
+        """SELECT * FROM change_alerts
+           WHERE alert_date >= date('now', ? || ' days')
+           ORDER BY alert_date DESC, ABS(delta) DESC""",
+        (f"-{days}",),
+    )
+    alerts = [dict(r) for r in cursor.fetchall()]
+    conn.close()
+    return {"alerts": alerts}
+
+
 def _risk_level(prob: float) -> str:
     if prob >= 0.5:
         return "CRITICAL"

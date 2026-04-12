@@ -129,6 +129,14 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
     conn.commit()
     logger.info("Extracted reasoning from %d articles.", extracted_count)
 
+    # --- Learning feedback from resolved predictions ---
+    prompt_feedback = ""
+    try:
+        from evaluation.learning import generate_prompt_feedback
+        prompt_feedback = generate_prompt_feedback(conn)
+    except Exception:
+        pass
+
     # --- Step 4: Track B Ensemble ---
     logger.info("[4/8] Running Track B forecasting ensemble...")
     chains = get_recent_reasoning_chains(conn, iso3, days=7)
@@ -141,6 +149,10 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
         )
         logger.info("No reasoning chains for %s, using country context as fallback.", iso3)
     acled_data = get_acled_summary(conn, iso3, days=30)
+
+    # Prepend learning feedback if available
+    if prompt_feedback:
+        reasoning_summary = prompt_feedback + "\n" + reasoning_summary
 
     ensemble_results = run_ensemble(country_config, track_a, reasoning_summary, acled_data)
 
@@ -255,6 +267,21 @@ def run_all():
 
     logger.info("Daily pipeline complete. %d/%d countries processed.",
                 sum(1 for r in results if "error" not in r), len(COUNTRIES))
+
+    # --- Phase 3: Change detection ---
+    try:
+        from pipeline.change_detection import detect_all_changes, store_alerts
+        conn = get_connection()
+        changes = detect_all_changes(conn, threshold_pct=5.0)
+        store_alerts(conn, changes)
+        sig = [c for c in changes if c["is_significant"]]
+        if sig:
+            logger.info("Significant changes detected: %d countries",  len(sig))
+            for c in sig:
+                logger.info("  %s: %+.1fpp (%s)", c["country_iso3"], c["delta_pct"], c["direction"])
+        conn.close()
+    except Exception as e:
+        logger.warning("Change detection failed: %s", e)
 
     return results
 
