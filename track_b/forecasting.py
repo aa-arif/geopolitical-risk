@@ -122,16 +122,16 @@ def forecast_devil(country_config: dict, track_a_result: dict,
         ap = f.get("final_probability", 0)
         agent_lines.append(f"Agent ({atype}): P={ap*100:.1f}%")
         if atype == "baserate":
-            for adj in f.get("upward_adjustments", [])[:3]:
-                agent_lines.append(f"  UP: {adj.get('factor','')} (+{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:120]}")
-            for adj in f.get("downward_adjustments", [])[:3]:
-                agent_lines.append(f"  DOWN: {adj.get('factor','')} (-{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:120]}")
+            for adj in f.get("upward_adjustments", [])[:6]:
+                agent_lines.append(f"  UP: {adj.get('factor','')} (+{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:150]}")
+            for adj in f.get("downward_adjustments", [])[:6]:
+                agent_lines.append(f"  DOWN: {adj.get('factor','')} (-{adj.get('magnitude',0):.2f}): {adj.get('reasoning','')[:150]}")
         elif atype == "analogy":
-            for a in f.get("analogies", [])[:3]:
-                agent_lines.append(f"  Analogy: {a.get('country','?')} {a.get('year','?')} - {a.get('outcome','')[:100]}")
+            for a in f.get("analogies", [])[:4]:
+                agent_lines.append(f"  Analogy: {a.get('country','?')} {a.get('year','?')} - {a.get('outcome','')[:120]}")
         elif atype == "decomposition":
-            for sq in f.get("sub_questions", [])[:4]:
-                agent_lines.append(f"  SubQ: {sq.get('question','')[:80]} -> P={sq.get('probability',0):.0%}")
+            for sq in f.get("sub_questions", [])[:6]:
+                agent_lines.append(f"  SubQ: {sq.get('question','')[:100]} -> P={sq.get('probability',0):.0%}")
     agent_reasoning = "\n".join(agent_lines) if agent_lines else "No detailed reasoning available."
 
     prompt = template.format(
@@ -141,6 +141,7 @@ def forecast_devil(country_config: dict, track_a_result: dict,
         preliminary_average=f"{avg * 100:.1f}",
         agent_reasoning=agent_reasoning,
         reasoning_chains_summary=reasoning_summary,
+        acled_summary=_format_acled_summary(acled_data),
     )
 
     result = generate(prompt=prompt, model="sonnet", temperature=0.5)
