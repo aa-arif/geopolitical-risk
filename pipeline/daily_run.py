@@ -21,6 +21,7 @@ from config.settings import (
     load_all_country_configs, load_country_config,
     FUSION_WEIGHT_TRACK_A, EXTREMIZING_PARAMETER,
     PREDICTION_WINDOW_DAYS, PROMPT_VERSIONS, COUNTRIES,
+    DATA_DIR,
 )
 from utils.db import (
     get_connection, initialize_db, get_recent_articles,
@@ -282,6 +283,26 @@ def run_all():
         conn.close()
     except Exception as e:
         logger.warning("Change detection failed: %s", e)
+
+    # --- Phase 4: Adaptive weight update ---
+    try:
+        from evaluation.weight_updater import compute_updated_weight
+        conn = get_connection()
+        update_result = compute_updated_weight(conn, FUSION_WEIGHT_TRACK_A)
+        if update_result["direction"] != "unchanged":
+            new_weight = update_result["new_weight"]
+            import json as json_mod
+            weight_file = DATA_DIR / "fusion_weight_override.json"
+            weight_file.write_text(json_mod.dumps({
+                "fusion_weight_track_a": new_weight,
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "reasoning": update_result["reasoning"],
+            }))
+            logger.info("Fusion weight updated: %.2f -> %.2f (%s)",
+                        FUSION_WEIGHT_TRACK_A, new_weight, update_result["direction"])
+        conn.close()
+    except Exception as e:
+        logger.warning("Weight update failed: %s", e)
 
     return results
 

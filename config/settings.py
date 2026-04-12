@@ -32,6 +32,16 @@ MODEL_HAIKU = "claude-haiku-4-5-20251001"
 FUSION_WEIGHT_TRACK_A = 0.6  # Weight favoring Track A (structural model)
 EXTREMIZING_PARAMETER = 1.0  # 1.0 = no extremizing; >1.0 = push away from 0.5
 
+# Load persisted weight override if it exists
+_WEIGHT_OVERRIDE_PATH = DATA_DIR / "fusion_weight_override.json"
+if _WEIGHT_OVERRIDE_PATH.exists():
+    try:
+        import json as _json
+        _override = _json.loads(_WEIGHT_OVERRIDE_PATH.read_text())
+        FUSION_WEIGHT_TRACK_A = _override["fusion_weight_track_a"]
+    except Exception:
+        pass
+
 # --- Prediction Parameters ---
 PREDICTION_WINDOW_DAYS = 30
 ACLED_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
