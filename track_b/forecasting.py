@@ -11,6 +11,7 @@ All agents receive the Track A probability as their outside-view anchor.
 """
 
 import json
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from config.settings import load_prompt
 from utils.api_client import generate
 from utils.logger import logger
@@ -169,18 +170,35 @@ def run_ensemble(country_config: dict, track_a_result: dict,
                  reasoning_summary: str, acled_data: dict) -> list:
     """
     Run all 4 forecasting agents and return their results.
-
-    Agents 1-3 run first (could be parallelized), then Agent 4
-    (devil's advocate) runs with knowledge of the preliminary consensus.
+    Agents 1-3 run concurrently, then Agent 4 runs with their results.
     """
-    # Agents 1-3 (independent, could be parallelized in future)
-    results = []
-    results.append(forecast_baserate(country_config, track_a_result,
-                                     reasoning_summary, acled_data))
-    results.append(forecast_analogy(country_config, track_a_result,
-                                    reasoning_summary, acled_data))
-    results.append(forecast_decomposition(country_config, track_a_result,
-                                          reasoning_summary, acled_data))
+    agent_funcs = [
+        ("baserate", forecast_baserate),
+        ("analogy", forecast_analogy),
+        ("decomposition", forecast_decomposition),
+    ]
+
+    results = [None, None, None]
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        future_to_idx = {}
+        for idx, (name, func) in enumerate(agent_funcs):
+            future = executor.submit(
+                func, country_config, track_a_result,
+                reasoning_summary, acled_data,
+            )
+            future_to_idx[future] = idx
+
+        for future in as_completed(future_to_idx):
+            idx = future_to_idx[future]
+            try:
+                results[idx] = future.result()
+            except Exception as e:
+                logger.error("Agent %d failed: %s", idx + 1, e)
+                results[idx] = {
+                    "final_probability": track_a_result["probability"],
+                    "agent_type": agent_funcs[idx][0],
+                    "key_uncertainties": [f"Agent failed: {e}"],
+                }
 
     # Agent 4 gets the preliminary results
     results.append(forecast_devil(country_config, track_a_result,
