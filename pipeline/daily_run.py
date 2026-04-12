@@ -253,7 +253,9 @@ def run_all():
         except Exception as e:
             logger.warning("GDELT pre-seed failed for %s: %s", country_name, e)
 
-    # --- Phase 2: Sequential pipeline (skip GDELT, already done) ---
+    # --- Phase 2: Sequential pipeline (GDELT skipped, already pre-seeded) ---
+    # Runs sequentially to respect Anthropic API rate limits.
+    # Each country makes ~5 LLM calls (3 parallel agents + supervisor + extraction).
     logger.info("Phase 2: Sequential pipeline for %d countries (GDELT skipped)...",
                 len(COUNTRIES))
     results = []
