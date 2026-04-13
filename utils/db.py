@@ -175,6 +175,27 @@ def initialize_db():
             ON reasoning_chains(country_iso3, created_at);
         CREATE INDEX IF NOT EXISTS idx_agent_outputs_type_country
             ON agent_outputs(agent_type, country_iso3);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_gdelt_conflict_unique
+            ON gdelt_conflict_events(country_iso3, event_date, event_type, latitude, longitude);
+    """)
+
+    # Deduplicate predictions before creating unique index (keep latest id per group)
+    conn.execute("""
+        DELETE FROM predictions WHERE id NOT IN (
+            SELECT MAX(id) FROM predictions GROUP BY country_iso3, prediction_date
+        )
+    """)
+    # Deduplicate gdelt_conflict_events before creating unique index
+    conn.execute("""
+        DELETE FROM gdelt_conflict_events WHERE id NOT IN (
+            SELECT MAX(id) FROM gdelt_conflict_events
+            GROUP BY country_iso3, event_date, event_type, latitude, longitude
+        )
+    """)
+    conn.executescript("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_unique
+            ON predictions(country_iso3, prediction_date);
     """)
     conn.commit()
     conn.close()

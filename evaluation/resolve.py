@@ -66,9 +66,9 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         )
         acled_count = acled_cursor.fetchone()["cnt"]
 
-        # Try GDELT conflict events as fallback
+        # Try GDELT conflict events as fallback (sum articles, not row count)
         gdelt_cursor = conn.execute(
-            """SELECT COUNT(*) as cnt FROM gdelt_conflict_events
+            """SELECT COALESCE(SUM(num_articles), 0) as cnt FROM gdelt_conflict_events
                WHERE country_iso3 = ?
                AND event_date >= ? AND event_date <= ?""",
             (iso3, pred_date, window_end),

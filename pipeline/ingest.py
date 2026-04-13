@@ -4,6 +4,7 @@ Fetches data from ACLED (OAuth), NewsAPI, GDELT, RSS feeds (feedparser + trafila
 """
 
 import json
+import socket
 import time
 import urllib.error
 import urllib.request
@@ -222,7 +223,13 @@ def ingest_rss(country_config: dict) -> int:
 
         for feed_url in feeds:
             try:
-                feed = feedparser.parse(feed_url)
+                old_timeout = socket.getdefaulttimeout()
+                socket.setdefaulttimeout(30)
+                try:
+                    feed = feedparser.parse(feed_url,
+                                            request_headers={"User-Agent": "GeoRisk/1.0"})
+                finally:
+                    socket.setdefaulttimeout(old_timeout)
             except Exception as e:
                 logger.warning("RSS fetch failed for %s: %s", feed_url, e)
                 continue
@@ -289,6 +296,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     # Delay to avoid 429 when running many countries in parallel
     time.sleep(5)
 
+    data = {}
     for attempt in range(2):
         try:
             raw = _http_get(url, timeout=120)
@@ -375,6 +383,7 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     # Delay to avoid 429 when running many countries in parallel
     time.sleep(5)
 
+    data = {}
     for attempt in range(2):
         try:
             raw = _http_get(url, timeout=120)
@@ -427,7 +436,12 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
                     """INSERT INTO gdelt_conflict_events
                        (country_iso3, event_date, event_type, num_articles,
                         avg_tone, latitude, longitude, source_url)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(country_iso3, event_date, event_type, latitude, longitude)
+                       DO UPDATE SET
+                           num_articles = excluded.num_articles,
+                           avg_tone = excluded.avg_tone,
+                           source_url = excluded.source_url""",
                     (iso3, event_date, "conflict_coverage", info["count"],
                      avg_tone, None, None, sample_url[:1000]),
                 )

@@ -52,7 +52,7 @@ def compute_data_hash(country_iso3: str, acled_count: int,
 def log_prediction(db_conn, prediction_data: dict) -> int:
     """Log a complete prediction with all metadata. Returns prediction ID."""
     cursor = db_conn.execute(
-        """INSERT INTO predictions
+        """INSERT OR REPLACE INTO predictions
         (country_iso3, prediction_date, window_end_date,
          track_a_probability, track_b_probability, fused_probability,
          extremized_probability, calibrated_probability,

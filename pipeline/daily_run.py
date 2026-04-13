@@ -316,6 +316,21 @@ def run_all():
     except Exception as e:
         logger.warning("Weight update failed: %s", e)
 
+    # --- Phase 5: Calibration model update ---
+    try:
+        from fusion.calibrate import fit_calibration_model
+        conn = get_connection()
+        resolved = get_resolved_predictions(conn)
+        if resolved:
+            preds = [r["calibrated_probability"] for r in resolved if r["actual_outcome"] is not None]
+            actuals = [r["actual_outcome"] for r in resolved if r["actual_outcome"] is not None]
+            if len(preds) >= 30:
+                fit_calibration_model(preds, actuals)
+                logger.info("Calibration model updated with %d resolved predictions", len(preds))
+        conn.close()
+    except Exception as e:
+        logger.warning("Calibration update failed: %s", e)
+
     return results
 
 
