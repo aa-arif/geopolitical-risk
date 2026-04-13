@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from config.settings import load_all_country_configs, load_all_available_country_configs, COUNTRIES
+from config.settings import load_all_country_configs, COUNTRIES
 from track_a.predict import predict_track_a
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
@@ -73,7 +73,7 @@ def health():
 
 @app.get("/countries")
 def list_countries():
-    configs = load_all_available_country_configs()
+    configs = load_all_country_configs()
     conn = get_connection()
     results = []
 
@@ -268,7 +268,7 @@ def get_country_events(iso3: str, days: int = 60):
 @app.get("/predictions/snapshot")
 def get_prediction_snapshot(date: str = None):
     conn = get_connection()
-    configs = load_all_available_country_configs()
+    configs = load_all_country_configs()
 
     if not date:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -290,7 +290,9 @@ def get_prediction_snapshot(date: str = None):
     predictions = []
     for row in rows:
         iso3 = row["country_iso3"]
-        config = configs.get(iso3, {})
+        if iso3 not in configs:
+            continue
+        config = configs[iso3]
         reasoning = json.loads(row["reasoning_summary"]) if row["reasoning_summary"] else {}
 
         agents = {}
@@ -381,8 +383,10 @@ def get_alerts(days: int = 30):
            ORDER BY alert_date DESC, ABS(delta) DESC""",
         (f"-{days}",),
     )
-    alerts = [dict(r) for r in cursor.fetchall()]
+    all_alerts = [dict(r) for r in cursor.fetchall()]
     conn.close()
+    active_configs = load_all_country_configs()
+    alerts = [a for a in all_alerts if a["country_iso3"] in active_configs]
     return {"alerts": alerts}
 
 
