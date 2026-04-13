@@ -41,7 +41,7 @@ function AgentOutputs({ agents }) {
   if (!agents || agents.length === 0) return null;
   return (
     <div>
-      <h4 className="section-label">Forecasting Agents</h4>
+      <h4 className="section-label">AI Analysis Agents</h4>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '.65rem' }}>
         {agents.map((agent, i) => {
           const label = AGENT_LABELS[agent.agent_type] || agent.agent_type;
@@ -157,7 +157,7 @@ function TrackBreakdown({ components }) {
   if (!components || Object.keys(components).length === 0) return null;
   return (
     <div>
-      <h4 className="section-label">Track A Components</h4>
+      <h4 className="section-label">Structural Model Components</h4>
       <div className="breakdown-grid">
         {Object.entries(components).map(([key, val], i) => {
           const numVal = typeof val === 'number' ? val : parseFloat(val);
@@ -246,17 +246,33 @@ export default function CountryDetail() {
 
       <ExecutiveSummary text={reasoning.executive_summary} />
 
+      {detail.risk_context && (
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: .35, delay: .05 }}
+          style={{
+            padding: '.85rem 1.1rem', marginBottom: '1.25rem',
+            background: 'rgba(255,255,255,.02)', border: '1px solid rgba(255,255,255,.04)',
+            borderRadius: '10px', fontSize: '.8rem', lineHeight: '1.65', color: '#7b8fa3',
+          }}>
+          <span style={{ fontWeight: 700, fontSize: '.58rem', letterSpacing: '.08em', textTransform: 'uppercase', color: '#475569', display: 'block', marginBottom: '.3rem' }}>Country Risk Context</span>
+          {detail.risk_context}
+        </motion.div>
+      )}
+
       <div className="detail-grid">
         <Card delay={.08}>
-          <h4 className="section-label">Instability Probability</h4>
+          <h4 className="section-label">Political Violence Probability</h4>
+          <div style={{ fontSize: '.62rem', color: '#475569', marginBottom: '.5rem', lineHeight: '1.5' }}>
+            Probability of significant escalation in battles, armed attacks, or mass civilian casualties within 30 days.
+          </div>
           <RiskGauge probability={probability} width={280} height={175} />
           <div className="gauge-tracks">
             <div className="gauge-track-item">
-              <span className="label">Track A</span>
+              <span className="label" title="PITF-based structural model using regime type, development indicators, and conflict history">Structural</span>
               <span className="mono" style={{ color: 'var(--track-a)' }}>{Math.round((pred.track_a??0)*100)}%</span>
             </div>
             <div className="gauge-track-item">
-              <span className="label">Track B</span>
+              <span className="label" title="AI ensemble analyzing current news, ACLED events, and causal reasoning chains">AI Analysis</span>
               <span className="mono" style={{ color: 'var(--track-b)' }}>{Math.round((pred.track_b??0)*100)}%</span>
             </div>
             <div className="gauge-track-item">

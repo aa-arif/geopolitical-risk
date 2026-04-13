@@ -131,9 +131,9 @@ export default function Evaluation() {
                 <tr>
                   <th>Country</th>
                   <th style={thStyle('calibrated')} onClick={()=>handleSort('calibrated')}>Calibrated {sortCol==='calibrated'?(sortDir>0?'\u25B2':'\u25BC'):''}</th>
-                  <th style={thStyle('track_a')} onClick={()=>handleSort('track_a')}>Track A</th>
-                  <th style={thStyle('track_b')} onClick={()=>handleSort('track_b')}>Track B</th>
-                  <th>Agent Spread</th>
+                  <th style={thStyle('track_a')} onClick={()=>handleSort('track_a')}>Structural</th>
+                  <th style={thStyle('track_b')} onClick={()=>handleSort('track_b')}>AI Analysis</th>
+                  <th title="Disagreement between AI analysis agents">Analyst Spread</th>
                   <th>Confidence</th>
                   <th>Window</th>
                   {nResolved > 0 && <th>Outcome</th>}
@@ -168,7 +168,7 @@ export default function Evaluation() {
         <div style={{marginTop:'1rem'}}>
           <div className="scores-grid">
             <div className="score-card"><span className="score-label">Resolved</span><span className="score-value mono">{evalData?.n_resolved??0}</span></div>
-            <div className="score-card"><span className="score-label">Brier Score</span><span className="score-value mono">{evalData?.brier_aggregate!=null?evalData.brier_aggregate.toFixed(4):'--'}</span></div>
+            <div className="score-card"><span className="score-label" title="Brier Score measures forecast accuracy (0 = perfect, 1 = worst). Lower is better.">Brier Score</span><span className="score-value mono">{evalData?.brier_aggregate!=null?evalData.brier_aggregate.toFixed(4):'--'}</span></div>
             <div className="score-card"><span className="score-label">Base Rate</span><span className="score-value mono">{evalData?.base_rate!=null?(evalData.base_rate*100).toFixed(1)+'%':'--'}</span></div>
           </div>
           <div className="detail-card" style={{marginBottom:'1rem'}}>
@@ -177,31 +177,31 @@ export default function Evaluation() {
           </div>
           {trackData && trackData.n_resolved > 0 && (
             <div className="detail-card">
-              <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.7rem'}}>Track A vs Track B</h3>
+              <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.7rem'}}>Structural Model vs AI Analysis</h3>
               <div className="scores-grid">
                 <div className="score-card">
-                  <span className="score-label">Track A Brier</span>
+                  <span className="score-label">Structural Brier</span>
                   <span className="score-value mono" style={{color:'var(--cyan)'}}>{trackData.track_a_brier?.toFixed(4) ?? '--'}</span>
                 </div>
                 <div className="score-card">
-                  <span className="score-label">Track B Brier</span>
+                  <span className="score-label">AI Analysis Brier</span>
                   <span className="score-value mono" style={{color:'var(--purple)'}}>{trackData.track_b_brier?.toFixed(4) ?? '--'}</span>
                 </div>
                 <div className="score-card">
-                  <span className="score-label">Fused Brier</span>
+                  <span className="score-label">Combined Brier</span>
                   <span className="score-value mono" style={{color:'#ffd600'}}>{trackData.fused_brier?.toFixed(4) ?? '--'}</span>
                 </div>
                 <div className="score-card">
-                  <span className="score-label">Best Track</span>
+                  <span className="score-label">Best Model</span>
                   <span className="score-value mono" style={{color: trackData.best_track === 'track_b' ? 'var(--purple)' : 'var(--cyan)'}}>
-                    {trackData.best_track === 'track_a' ? 'Track A' : trackData.best_track === 'track_b' ? 'Track B' : trackData.best_track === 'fused' ? 'Fused' : '--'}
+                    {trackData.best_track === 'track_a' ? 'Structural' : trackData.best_track === 'track_b' ? 'AI Analysis' : trackData.best_track === 'fused' ? 'Combined' : '--'}
                   </span>
                 </div>
               </div>
               {trackData.per_prediction && trackData.per_prediction.length > 0 && (
                 <table className="eval-table" style={{marginTop:'.8rem', fontSize:'.75rem'}}>
                   <thead>
-                    <tr><th>Country</th><th>Date</th><th>Brier A</th><th>Brier B</th><th>Brier Fused</th><th>Outcome</th></tr>
+                    <tr><th>Country</th><th>Date</th><th>Structural</th><th>AI Analysis</th><th>Combined</th><th>Outcome</th></tr>
                   </thead>
                   <tbody>
                     {trackData.per_prediction.map((p, i) => (

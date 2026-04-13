@@ -50,18 +50,18 @@ function RiskCard({ country, index }) {
         </div>
         <div className="risk-card-body">
           <div className="risk-card-row">
-            <span className="label">Fused Probability</span>
+            <span className="label">Violence Probability</span>
             <ProbabilityBar value={country.current_probability ?? 0} />
           </div>
           <div className="risk-card-tracks">
             <div className="track-item">
-              <span className="label">Track A</span>
+              <span className="label" title="Structural model based on regime type, development indicators, and conflict history">Structural</span>
               <span className="mono track-val" style={{ color: 'var(--track-a)' }}>
                 {country.track_a != null ? Math.round(country.track_a * 100) + '%' : '--'}
               </span>
             </div>
             <div className="track-item">
-              <span className="label">Track B</span>
+              <span className="label" title="AI analysis of current news, ACLED events, and causal reasoning">AI Analysis</span>
               <span className="mono track-val" style={{ color: 'var(--track-b)' }}>
                 {country.track_b != null ? Math.round(country.track_b * 100) + '%' : '--'}
               </span>
@@ -135,6 +135,14 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <div style={{
+        padding: '.55rem .85rem', marginBottom: '1rem',
+        background: 'rgba(56,189,248,.04)', border: '1px solid rgba(56,189,248,.1)',
+        borderRadius: '8px', fontSize: '.72rem', lineHeight: '1.55', color: '#6b8aab',
+      }}>
+        <strong style={{ color: '#94a3b8' }}>What we predict:</strong> Probability of a significant escalation in political violence (battles, armed attacks, mass civilian casualties) within a 30-day window, exceeding the country's historical baseline. Combines structural indicators with AI-driven news analysis.
+      </div>
+
       <AnimatePresence mode="wait">
         {view === 'grid' ? (
           <motion.div key="grid" className="risk-grid"
@@ -168,7 +176,7 @@ export default function Dashboard() {
                   {Math.round((c.current_probability??0)*100)}%
                 </div>
                 <div className="mono" style={{fontSize:'.6rem', color:'var(--text-2)'}}>
-                  {c.resolved ? (c.actual_outcome === 1 ? 'INSTABILITY' : 'STABLE') : daysLeft != null ? `Resolves ${daysLeft}d` : 'Pending'}
+                  {c.resolved ? (c.actual_outcome === 1 ? 'VIOLENCE ESCALATION' : 'BELOW THRESHOLD') : daysLeft != null ? `${daysLeft}d remaining` : 'Pending'}
                 </div>
               </Link>
             );

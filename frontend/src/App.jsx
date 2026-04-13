@@ -4,6 +4,7 @@ import { AnimatePresence } from 'framer-motion';
 import Dashboard from './pages/Dashboard';
 import CountryDetail from './pages/CountryDetail';
 import Evaluation from './pages/Evaluation';
+import Methodology from './pages/Methodology';
 
 export default function App() {
   const location = useLocation();
@@ -17,6 +18,7 @@ export default function App() {
         <nav className="main-nav">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
           <NavLink to="/evaluation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Predictions</NavLink>
+          <NavLink to="/methodology" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Methodology</NavLink>
         </nav>
       </header>
       <main className="app-main">
@@ -25,6 +27,7 @@ export default function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/country/:iso3" element={<CountryDetail />} />
             <Route path="/evaluation" element={<Evaluation />} />
+            <Route path="/methodology" element={<Methodology />} />
           </Routes>
         </AnimatePresence>
       </main>
