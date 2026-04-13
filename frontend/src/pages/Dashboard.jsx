@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCountries } from '../api';
+import { getCountries, getAlerts } from '../api';
 import WorldMap from '../components/WorldMap';
 
 const RISK_ORDER = { CRITICAL: 0, HIGH: 1, ELEVATED: 2, LOW: 3 };
@@ -82,6 +82,7 @@ function RiskCard({ country, index }) {
 
 export default function Dashboard() {
   const [countries, setCountries] = useState([]);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [view, setView] = useState('grid');
@@ -96,6 +97,7 @@ export default function Dashboard() {
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
+    getAlerts(14).then(d => setAlerts(d.alerts || [])).catch(() => {});
   }, []);
 
   if (loading) return <div className="loading">Loading intelligence data...</div>;
@@ -148,6 +150,59 @@ export default function Dashboard() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Active Predictions */}
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.3}} style={{marginTop:'1.5rem'}}>
+        <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.6rem'}}>Active Predictions</h3>
+        <div style={{display:'flex', gap:'.6rem', overflowX:'auto', paddingBottom:'.5rem', scrollbarWidth:'none', WebkitOverflowScrolling:'touch'}}>
+          {countries.map(c => {
+            const daysLeft = c.window_end ? Math.max(0, Math.ceil((new Date(c.window_end) - new Date()) / 86400000)) : null;
+            const riskColor = RISK_COLORS[c.risk_level] || '#555';
+            return (
+              <Link to={`/country/${c.iso3}`} key={c.iso3} style={{
+                minWidth:'140px', padding:'.7rem', background:'var(--bg-2)', border:'1px solid var(--border-0)',
+                borderRadius:'var(--r-sm)', textDecoration:'none', color:'inherit', flexShrink:0,
+              }}>
+                <div style={{fontSize:'.68rem', color:'var(--text-2)', fontWeight:600}}>{c.name}</div>
+                <div className="mono" style={{fontSize:'1.2rem', fontWeight:800, color:riskColor, margin:'.2rem 0'}}>
+                  {Math.round((c.current_probability??0)*100)}%
+                </div>
+                <div className="mono" style={{fontSize:'.6rem', color:'var(--text-2)'}}>
+                  {c.resolved ? (c.actual_outcome === 1 ? 'INSTABILITY' : 'STABLE') : daysLeft != null ? `Resolves ${daysLeft}d` : 'Pending'}
+                </div>
+              </Link>
+            );
+          })}
+        </div>
+      </motion.div>
+
+      {/* Recent Activity */}
+      <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:0.4}} style={{marginTop:'1.5rem'}}>
+        <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.6rem'}}>Recent Activity</h3>
+        {alerts.length === 0 ? (
+          <div style={{fontSize:'.78rem', color:'var(--text-2)', padding:'.8rem', background:'var(--bg-2)', borderRadius:'var(--r-sm)'}}>
+            Change alerts will appear here as predictions evolve.
+          </div>
+        ) : (
+          <div style={{background:'var(--bg-2)', borderRadius:'var(--r-sm)', border:'1px solid var(--border-0)'}}>
+            {alerts.slice(0,8).map((a,i) => {
+              const rising = a.delta > 0;
+              const color = rising ? 'var(--critical)' : 'var(--low)';
+              const arrow = rising ? '\u2191' : '\u2193';
+              const daysAgo = Math.floor((Date.now() - new Date(a.alert_date).getTime()) / 86400000);
+              const when = daysAgo === 0 ? 'today' : `${daysAgo}d ago`;
+              return (
+                <div key={i} style={{padding:'.55rem .8rem', borderBottom: i < alerts.length-1 ? '1px solid var(--border-0)' : 'none', display:'flex', alignItems:'center', gap:'.6rem'}}>
+                  <span className="mono" style={{color, fontWeight:700, fontSize:'.85rem', minWidth:'20px'}}>{arrow}</span>
+                  <span className="mono" style={{color, fontWeight:700, fontSize:'.78rem', minWidth:'50px'}}>{(a.delta*100).toFixed(1)}pp</span>
+                  <span style={{flex:1, fontSize:'.75rem', color:'var(--text-1)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap'}}>{a.alert_text}</span>
+                  <span className="mono" style={{fontSize:'.6rem', color:'var(--text-2)', flexShrink:0}}>{when}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </motion.div>
     </motion.div>
   );
 }
