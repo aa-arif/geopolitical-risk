@@ -94,3 +94,16 @@ def load_all_country_configs() -> dict:
         cfg = load_country_config(country)
         configs[cfg["iso3"]] = cfg
     return configs
+
+
+def load_all_available_country_configs() -> dict:
+    """Load ALL country configs from the countries directory, not just active ones."""
+    configs = {}
+    for f in COUNTRIES_DIR.iterdir():
+        if f.suffix == ".json":
+            try:
+                cfg = load_country_config(f.stem)
+                configs[cfg["iso3"]] = cfg
+            except Exception:
+                pass
+    return configs

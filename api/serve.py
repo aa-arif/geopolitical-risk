@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from config.settings import load_all_country_configs, COUNTRIES
+from config.settings import load_all_country_configs, load_all_available_country_configs, COUNTRIES
 from track_a.predict import predict_track_a
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
@@ -73,7 +73,7 @@ def health():
 
 @app.get("/countries")
 def list_countries():
-    configs = load_all_country_configs()
+    configs = load_all_available_country_configs()
     conn = get_connection()
     results = []
 
@@ -268,7 +268,7 @@ def get_country_events(iso3: str, days: int = 60):
 @app.get("/predictions/snapshot")
 def get_prediction_snapshot(date: str = None):
     conn = get_connection()
-    configs = load_all_country_configs()
+    configs = load_all_available_country_configs()
 
     if not date:
         date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -278,13 +278,13 @@ def get_prediction_snapshot(date: str = None):
                   (SELECT GROUP_CONCAT(a.agent_type || ':' || a.probability, '|')
                    FROM agent_outputs a WHERE a.prediction_id = p.id) as agents_raw
            FROM predictions p
-           WHERE p.prediction_date <= ?
-           AND p.prediction_date = (
-               SELECT MAX(p2.prediction_date) FROM predictions p2
-               WHERE p2.country_iso3 = p.country_iso3 AND p2.prediction_date <= ?
+           WHERE p.id IN (
+               SELECT MAX(p2.id) FROM predictions p2
+               WHERE p2.prediction_date <= ?
+               GROUP BY p2.country_iso3
            )
            ORDER BY p.calibrated_probability DESC""",
-        (date, date),
+        (date,),
     ).fetchall()
 
     predictions = []
