@@ -317,20 +317,38 @@ def get_resolved_predictions(conn, country_iso3: str = None) -> list:
     return [dict(row) for row in cursor.fetchall()]
 
 
-def compute_event_threshold(conn, country_iso3: str, months: int = 12) -> float:
+def compute_event_threshold(conn, country_iso3: str, months: int = 12,
+                             before_date: str = None) -> float:
     """
-    Compute the 90th percentile of monthly ACLED event counts.
-    Returns the threshold count above which a month is considered 'instability'.
+    Compute the 90th percentile of monthly violent ACLED event counts.
+
+    Only counts events that constitute political violence:
+    Battles, Explosions/Remote violence, Violence against civilians
+    -- with at least 1 fatality. This decouples the resolution criterion
+    from the broader ACLED data used as model input (which includes
+    protests, strategic developments, etc.).
+
+    Args:
+        before_date: If set, only use data before this date (prevents
+                     look-ahead contamination when computing at prediction time).
     """
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+    if before_date:
+        end_date = before_date
+    else:
+        end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    cutoff = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=months * 30)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT strftime('%Y-%m', event_date) as month, COUNT(*) as cnt
            FROM acled_events
            WHERE country_iso3 = ?
-           AND event_date >= ?
+           AND event_date >= ? AND event_date < ?
+           AND event_type IN ('Battles', 'Explosions/Remote violence',
+                              'Violence against civilians')
+           AND fatalities > 0
            GROUP BY month
            ORDER BY month""",
-        (country_iso3, cutoff)
+        (country_iso3, cutoff, end_date)
     )
     rows = cursor.fetchall()
     if not rows:

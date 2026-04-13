@@ -83,8 +83,12 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
             logger.info("Supplementary ingestion for %s: NewsAPI=%d, GDELT=%d", iso3, extra_news, extra_gdelt)
 
         # --- Compute event threshold ---
-        event_threshold = compute_event_threshold(conn, iso3, months=12)
-        logger.info("Event threshold (90th pct) for %s: %.0f events/month", iso3, event_threshold)
+        # Committed at prediction time using only pre-prediction data to avoid look-ahead.
+        # Uses only violent events (battles, explosions, violence against civilians) with
+        # fatalities, decoupled from the broader ACLED data used as model input.
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        event_threshold = compute_event_threshold(conn, iso3, months=12, before_date=today)
+        logger.info("Event threshold (90th pct violent events) for %s: %.0f events/month", iso3, event_threshold)
 
         # --- Step 2: Track A ---
         logger.info("[2/8] Running Track A (structural model)...")

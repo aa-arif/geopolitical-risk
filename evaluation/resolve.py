@@ -1,8 +1,16 @@
 """
 Automated prediction resolution.
-When a 30-day prediction window closes, query ACLED (primary) or
-GDELT conflict events (fallback) to determine if the instability
-threshold was exceeded.
+When a 30-day prediction window closes, determine if political violence
+exceeded the pre-committed threshold.
+
+Resolution uses only VIOLENT ACLED events (Battles, Explosions/Remote
+violence, Violence against civilians) with fatalities > 0. This is
+deliberately decoupled from the broader ACLED data used as model input
+(which includes protests, strategic developments, etc.) to avoid
+circular evaluation.
+
+The threshold is committed at prediction time and stored immutably in
+the predictions table, preventing look-ahead contamination.
 """
 
 from datetime import datetime, timezone
@@ -15,11 +23,24 @@ from utils.logger import logger
 # GDELT events are less curated, so threshold is higher.
 GDELT_INSTABILITY_THRESHOLD = 100
 
+# Resolution event filter: only these ACLED event types count toward
+# the instability outcome. This decouples resolution from the broader
+# ACLED data used as model input.
+RESOLUTION_EVENT_TYPES = (
+    "Battles",
+    "Explosions/Remote violence",
+    "Violence against civilians",
+)
+
 
 def resolve_expired_predictions(conn, country_iso3: str = None):
     """
-    Check all expired prediction windows and resolve them using
-    ACLED data (primary) or GDELT conflict events (fallback).
+    Check all expired prediction windows and resolve them.
+
+    Resolution criterion: did the count of violent ACLED events
+    (battles, explosions, attacks on civilians) with fatalities
+    exceed the pre-committed 90th-percentile threshold during the
+    prediction window?
 
     Returns list of resolved prediction dicts.
     """
@@ -56,13 +77,21 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         window_end = pred["window_end_date"]
         calibrated_p = pred["calibrated_probability"]
 
-        # Use stored threshold, fall back to recomputation for old predictions
-        threshold = pred.get("event_threshold") or compute_event_threshold(conn, iso3, months=12)
+        # Use stored threshold (committed at prediction time).
+        # Fall back to recomputation only for old predictions that predate this fix.
+        threshold = pred.get("event_threshold") or compute_event_threshold(
+            conn, iso3, months=12, before_date=pred_date
+        )
+
+        # Count only violent events with fatalities -- decoupled from model input
+        placeholders = ",".join("?" for _ in RESOLUTION_EVENT_TYPES)
         acled_cursor = conn.execute(
-            """SELECT COUNT(*) as cnt FROM acled_events
+            f"""SELECT COUNT(*) as cnt FROM acled_events
                WHERE country_iso3 = ?
-               AND event_date >= ? AND event_date <= ?""",
-            (iso3, pred_date, window_end),
+               AND event_date >= ? AND event_date <= ?
+               AND event_type IN ({placeholders})
+               AND fatalities > 0""",
+            (iso3, pred_date, window_end) + RESOLUTION_EVENT_TYPES,
         )
         acled_count = acled_cursor.fetchone()["cnt"]
 
@@ -81,8 +110,8 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         event_count = 0
 
         if acled_count > 0 and threshold > 0:
-            # Primary: ACLED
-            resolution_source = "acled"
+            # Primary: ACLED violent events with fatalities
+            resolution_source = "acled_violent"
             event_count = acled_count
             actual_outcome = 1 if acled_count > threshold else 0
         elif gdelt_count > 0:
@@ -91,7 +120,7 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
             event_count = gdelt_count
             actual_outcome = 1 if gdelt_count > GDELT_INSTABILITY_THRESHOLD else 0
             logger.info(
-                "Using GDELT fallback for %s pred %d (ACLED count=%d, GDELT count=%d)",
+                "Using GDELT fallback for %s pred %d (ACLED violent=%d, GDELT=%d)",
                 iso3, pred["id"], acled_count, gdelt_count,
             )
         else:

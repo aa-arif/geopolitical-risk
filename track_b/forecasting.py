@@ -163,9 +163,13 @@ def _validate_forecast(result: dict, track_a_prob: float = None) -> None:
         p = p / 100.0
     p = max(0.01, min(0.99, p))
 
-    # Clamp to within 25pp of Track A if available
+    # Clamp to within 50pp of Track A if available.
+    # Wide enough for Track B to signal genuine surprises the structural
+    # model misses, while still preventing total hallucination.
+    # The prompt-level constraint (20pp) handles normal anchoring;
+    # this code clamp is a safety net for extreme cases only.
     if track_a_prob is not None:
-        max_deviation = 0.25
+        max_deviation = 0.50
         p = max(track_a_prob - max_deviation, min(track_a_prob + max_deviation, p))
         p = max(0.01, min(0.99, p))
 
