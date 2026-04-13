@@ -57,7 +57,7 @@ def forecast_baserate(country_config: dict, track_a_result: dict,
 
     result = generate(prompt=prompt, model="sonnet", temperature=0.3)
     result["agent_type"] = "baserate"
-    _validate_forecast(result)
+    _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 1 (baserate) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -77,7 +77,7 @@ def forecast_analogy(country_config: dict, track_a_result: dict,
 
     result = generate(prompt=prompt, model="sonnet", temperature=0.4)
     result["agent_type"] = "analogy"
-    _validate_forecast(result)
+    _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 2 (analogy) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -97,7 +97,7 @@ def forecast_decomposition(country_config: dict, track_a_result: dict,
 
     result = generate(prompt=prompt, model="sonnet", temperature=0.3)
     result["agent_type"] = "decomposition"
-    _validate_forecast(result)
+    _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 3 (decomp) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -146,13 +146,13 @@ def forecast_devil(country_config: dict, track_a_result: dict,
 
     result = generate(prompt=prompt, model="sonnet", temperature=0.5)
     result["agent_type"] = "devil"
-    _validate_forecast(result)
+    _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 4 (devil) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
 
 
-def _validate_forecast(result: dict) -> None:
+def _validate_forecast(result: dict, track_a_prob: float = None) -> None:
     """Ensure forecast result has valid final_probability."""
     if "final_probability" not in result:
         result["final_probability"] = 0.15  # default fallback
@@ -161,7 +161,15 @@ def _validate_forecast(result: dict) -> None:
     # Handle both 0-1 and 0-100 scales
     if p > 1.0:
         p = p / 100.0
-    result["final_probability"] = max(0.01, min(0.99, p))
+    p = max(0.01, min(0.99, p))
+
+    # Clamp to within 25pp of Track A if available
+    if track_a_prob is not None:
+        max_deviation = 0.25
+        p = max(track_a_prob - max_deviation, min(track_a_prob + max_deviation, p))
+        p = max(0.01, min(0.99, p))
+
+    result["final_probability"] = p
 
     if "key_uncertainties" not in result:
         result["key_uncertainties"] = []

@@ -115,9 +115,10 @@ def reconcile(country_config: dict, track_a_result: dict,
 
     # Validate
     if "final_probability" not in result:
-        # Fallback: average of agent probabilities
-        avg = sum(a["final_probability"] for a in agents[:4]) / 4
-        result["final_probability"] = avg
+        # Fallback: use median of agent probabilities (robust to outliers)
+        import statistics
+        probs = sorted([a["final_probability"] for a in agents[:4]])
+        result["final_probability"] = statistics.median(probs)
 
     p = result["final_probability"]
     if p > 1.0:

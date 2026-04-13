@@ -27,6 +27,9 @@ FAILURE MODES TO AVOID:
 3. Ignoring base rate reversion -- most elevated-risk months do NOT produce instability events. The base rate exists because instability is rare even in high-risk countries.
 4. Symmetric adjustment bias -- finding equal upward and downward adjustments that cancel out. Take a position.
 
+HARD CONSTRAINT:
+Your final_probability MUST be within 20 percentage points of the base rate ({track_a_probability}%). If the base rate is 2%, your answer must be between 0% and 22%. If the base rate is 34%, your answer must be between 14% and 54%. Violations of this constraint indicate a reasoning failure. If you feel the true probability is outside this range, state your constrained estimate and explain what extraordinary evidence would justify breaking the constraint.
+
 INSTRUCTIONS:
 1. State the base rate explicitly.
 2. Identify which current factors justify adjusting UP from the base rate, and by how much.
