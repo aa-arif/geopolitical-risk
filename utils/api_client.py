@@ -107,3 +107,5 @@ def generate(
                 time.sleep(2 ** attempt)
                 continue
             raise
+
+    raise RuntimeError(f"LLM API call failed after {max_retries} retries (last error: rate limited)")

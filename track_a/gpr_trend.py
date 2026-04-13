@@ -27,18 +27,18 @@ _FALLBACK_TRENDS = {
     "NGA": 0.3,   # Security situation, banditry, US tensions
     "BGD": 0.5,   # Post-crisis political uncertainty
     "PAK": 0.4,   # PTI crackdown, TTP escalation
-    "PHL": 0.1,   # Moderate, Marcos-Duterte tension
+    "PHL": -0.1,  # Relative stability, Marcos consolidation
     "TUR": 0.4,   # Imamoglu arrest, opposition crackdown
     "ETH": 0.3,   # Post-Tigray fragility, Amhara/Oromia tensions
     "MMR": 0.6,   # Active civil war, junta vs resistance
-    "IRQ": 0.1,   # Relative stability, militia tensions
-    "COL": 0.2,   # Peace process stalling, ELN/FARC remnants
+    "IRQ": -0.1,  # Relative stability, militia tensions manageable
+    "COL": -0.1,  # Peace process ongoing, reduced violence trend
     "SDN": 0.8,   # Active civil war, RSF vs SAF
     "UKR": 0.7,   # Active international war
     "SOM": 0.5,   # Al-Shabaab, clan conflict, state fragility
     "YEM": 0.4,   # Ceasefire fragile, Houthi situation
-    "EGY": 0.2,   # Economic stress, stable autocracy
-    "KEN": 0.2,   # Post-protest recovery, fiscal austerity tensions
+    "EGY": -0.1,  # Economic stress but stable autocracy, risk narrative declining
+    "KEN": -0.1,  # Post-protest recovery, situation stabilizing
 }
 
 # Cache for loaded GPR data: {iso3: [(datetime, value), ...]}
