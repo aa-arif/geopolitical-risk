@@ -29,3 +29,15 @@
 - Check for errors: `findstr /i "error\|failed" data\pipeline_logs\daily_YYYY-MM-DD.log`
 - View predictions: http://localhost:8000/countries (if API server running)
 - View alerts: http://localhost:8000/alerts
+- Health check: `python -m scripts.health_check`
+
+## Weekly Digest Scheduled Task
+
+1. Open Task Scheduler
+2. Create Basic Task: "GeoRisk Weekly Digest"
+3. Trigger: Weekly, Sunday 10:00 AM
+4. Action: Start a Program
+5. Program: C:\Users\arif6\geopolitical-risk\run_weekly_digest.bat
+6. Start in: C:\Users\arif6\geopolitical-risk
+
+The digest is saved to `data/digests/weekly_YYYY-MM-DD.md`. Copy the content to Substack for the Instability Monitor newsletter.
