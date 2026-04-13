@@ -184,40 +184,42 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
         return 0
 
     conn = get_connection()
-    count = 0
-    for ev in all_events:
-        try:
-            conn.execute(
-                """INSERT INTO acled_events
-                   (country_iso3, event_date, event_type, sub_event_type,
-                    fatalities, latitude, longitude, source, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                   ON CONFLICT(country_iso3, event_date, event_type,
-                               sub_event_type, latitude, longitude)
-                   DO UPDATE SET
-                       fatalities = excluded.fatalities,
-                       notes = excluded.notes,
-                       source = excluded.source""",
-                (
-                    country_iso3,
-                    ev.get("event_date", ""),
-                    ev.get("event_type", ""),
-                    ev.get("sub_event_type", ""),
-                    int(ev.get("fatalities", 0)),
-                    float(ev.get("latitude", 0)) if ev.get("latitude") else None,
-                    float(ev.get("longitude", 0)) if ev.get("longitude") else None,
-                    ev.get("source", ""),
-                    ev.get("notes", "")[:500],
-                ),
-            )
-            count += 1
-        except Exception as e:
-            logger.debug("Skipping ACLED event: %s", e)
+    try:
+        count = 0
+        for ev in all_events:
+            try:
+                conn.execute(
+                    """INSERT INTO acled_events
+                       (country_iso3, event_date, event_type, sub_event_type,
+                        fatalities, latitude, longitude, source, notes)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(country_iso3, event_date, event_type,
+                                   sub_event_type, latitude, longitude)
+                       DO UPDATE SET
+                           fatalities = excluded.fatalities,
+                           notes = excluded.notes,
+                           source = excluded.source""",
+                    (
+                        country_iso3,
+                        ev.get("event_date", ""),
+                        ev.get("event_type", ""),
+                        ev.get("sub_event_type", ""),
+                        int(ev.get("fatalities", 0)),
+                        float(ev.get("latitude", 0)) if ev.get("latitude") else None,
+                        float(ev.get("longitude", 0)) if ev.get("longitude") else None,
+                        ev.get("source", ""),
+                        ev.get("notes", "")[:500],
+                    ),
+                )
+                count += 1
+            except Exception as e:
+                logger.debug("Skipping ACLED event: %s", e)
 
-    conn.commit()
-    conn.close()
-    logger.info("Ingested %d ACLED events for %s.", count, country_iso3)
-    return count
+        conn.commit()
+        logger.info("Ingested %d ACLED events for %s.", count, country_iso3)
+        return count
+    finally:
+        conn.close()
 
 
 def ingest_rss(country_config: dict) -> int:
@@ -233,52 +235,52 @@ def ingest_rss(country_config: dict) -> int:
 
     iso3 = country_config["iso3"]
     conn = get_connection()
-    total = 0
+    try:
+        total = 0
 
-    for feed_url in feeds:
-        try:
-            feed = feedparser.parse(feed_url)
-        except Exception as e:
-            logger.warning("RSS fetch failed for %s: %s", feed_url, e)
-            continue
-
-        for entry in feed.entries[:20]:
-            title = entry.get("title", "")
-            link = entry.get("link", "")
-            published = entry.get("published", "")
-            description = entry.get("summary", "")
-
-            if not title:
-                continue
-
-            # Check for duplicates by URL
-            existing = conn.execute(
-                "SELECT id FROM articles WHERE url = ?", (link,)
-            ).fetchone()
-            if existing:
-                continue
-
-            # Fetch full text; fall back to RSS description
-            full_text = ""
-            if link:
-                full_text = fetch_full_text(link)
-                time.sleep(2)  # Be polite to servers
-            if not full_text:
-                full_text = description
-
+        for feed_url in feeds:
             try:
-                insert_article(
-                    conn, iso3, title[:500], feed_url,
-                    link[:1000], published[:100], full_text[:50000],
-                )
-                total += 1
+                feed = feedparser.parse(feed_url)
             except Exception as e:
-                logger.debug("Skipping article: %s", e)
+                logger.warning("RSS fetch failed for %s: %s", feed_url, e)
+                continue
 
-    conn.commit()
-    conn.close()
-    logger.info("Ingested %d RSS articles for %s.", total, iso3)
-    return total
+            for entry in feed.entries[:20]:
+                title = entry.get("title", "")
+                link = entry.get("link", "")
+                published = entry.get("published", "")
+                description = entry.get("summary", "")
+
+                if not title:
+                    continue
+
+                existing = conn.execute(
+                    "SELECT id FROM articles WHERE url = ?", (link,)
+                ).fetchone()
+                if existing:
+                    continue
+
+                full_text = ""
+                if link:
+                    full_text = fetch_full_text(link)
+                    time.sleep(2)
+                if not full_text:
+                    full_text = description
+
+                try:
+                    insert_article(
+                        conn, iso3, title[:500], feed_url,
+                        link[:1000], published[:100], full_text[:50000],
+                    )
+                    total += 1
+                except Exception as e:
+                    logger.debug("Skipping article: %s", e)
+
+        conn.commit()
+        logger.info("Ingested %d RSS articles for %s.", total, iso3)
+        return total
+    finally:
+        conn.close()
 
 
 def ingest_gdelt(country_config: dict, days: int = 7) -> int:
@@ -327,43 +329,43 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
         return 0
 
     conn = get_connection()
-    count = 0
-    scraped = 0
+    try:
+        count = 0
+        scraped = 0
 
-    for i, art in enumerate(articles):
-        art_url = art.get("url", "")
-        title = art.get("title", "")
-        seen_date = art.get("seendate", "")[:10]
-        domain = art.get("domain", "GDELT")
+        for i, art in enumerate(articles):
+            art_url = art.get("url", "")
+            title = art.get("title", "")
+            seen_date = art.get("seendate", "")[:10]
+            domain = art.get("domain", "GDELT")
 
-        if not art_url or not title:
-            continue
+            if not art_url or not title:
+                continue
 
-        # Deduplicate by URL
-        existing = conn.execute("SELECT id FROM articles WHERE url = ?", (art_url,)).fetchone()
-        if existing:
-            continue
+            existing = conn.execute("SELECT id FROM articles WHERE url = ?", (art_url,)).fetchone()
+            if existing:
+                continue
 
-        # Only scrape full text for the first 20 new articles
-        full_text = ""
-        if scraped < 20:
-            full_text = fetch_full_text(art_url)
-            scraped += 1
-            time.sleep(2)
-        if not full_text:
-            full_text = title  # Store title as minimal text for the rest
+            full_text = ""
+            if scraped < 20:
+                full_text = fetch_full_text(art_url)
+                scraped += 1
+                time.sleep(2)
+            if not full_text:
+                full_text = title
 
-        try:
-            insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
-                           art_url[:1000], seen_date, full_text[:50000])
-            count += 1
-        except Exception as e:
-            logger.debug("Skipping GDELT article: %s", e)
+            try:
+                insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
+                               art_url[:1000], seen_date, full_text[:50000])
+                count += 1
+            except Exception as e:
+                logger.debug("Skipping GDELT article: %s", e)
 
-    conn.commit()
-    conn.close()
-    logger.info("Ingested %d GDELT articles for %s (%d with full text).", count, iso3, scraped)
-    return count
+        conn.commit()
+        logger.info("Ingested %d GDELT articles for %s (%d with full text).", count, iso3, scraped)
+        return count
+    finally:
+        conn.close()
 
 
 def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
@@ -431,30 +433,32 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
             daily[seen]["urls"].append(art["url"])
 
     conn = get_connection()
-    count = 0
+    try:
+        count = 0
 
-    for event_date, info in sorted(daily.items()):
-        avg_tone = sum(info["tones"]) / len(info["tones"]) if info["tones"] else 0.0
-        sample_url = info["urls"][0] if info["urls"] else ""
+        for event_date, info in sorted(daily.items()):
+            avg_tone = sum(info["tones"]) / len(info["tones"]) if info["tones"] else 0.0
+            sample_url = info["urls"][0] if info["urls"] else ""
 
-        try:
-            conn.execute(
-                """INSERT INTO gdelt_conflict_events
-                   (country_iso3, event_date, event_type, num_articles,
-                    avg_tone, latitude, longitude, source_url)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (iso3, event_date, "conflict_coverage", info["count"],
-                 avg_tone, None, None, sample_url[:1000]),
-            )
-            count += 1
-        except Exception as e:
-            logger.debug("Skipping GDELT daily aggregate: %s", e)
+            try:
+                conn.execute(
+                    """INSERT INTO gdelt_conflict_events
+                       (country_iso3, event_date, event_type, num_articles,
+                        avg_tone, latitude, longitude, source_url)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    (iso3, event_date, "conflict_coverage", info["count"],
+                     avg_tone, None, None, sample_url[:1000]),
+                )
+                count += 1
+            except Exception as e:
+                logger.debug("Skipping GDELT daily aggregate: %s", e)
 
-    conn.commit()
-    conn.close()
-    logger.info("Ingested %d GDELT daily event records for %s (%d articles total).",
-                count, iso3, len(articles))
-    return count
+        conn.commit()
+        logger.info("Ingested %d GDELT daily event records for %s (%d articles total).",
+                    count, iso3, len(articles))
+        return count
+    finally:
+        conn.close()
 
 
 def ingest_newsapi(country_config: dict, days: int = 7) -> int:
@@ -497,40 +501,40 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
         return 0
 
     conn = get_connection()
-    count = 0
+    try:
+        count = 0
 
-    for art in articles:
-        title = art.get("title", "")
-        url = art.get("url", "")
-        published = art.get("publishedAt", "")
-        content = art.get("content", "") or art.get("description", "") or ""
-        source_name = art.get("source", {}).get("name", "NewsAPI")
+        for art in articles:
+            title = art.get("title", "")
+            url = art.get("url", "")
+            published = art.get("publishedAt", "")
+            content = art.get("content", "") or art.get("description", "") or ""
+            source_name = art.get("source", {}).get("name", "NewsAPI")
 
-        if not title or not url:
-            continue
+            if not title or not url:
+                continue
 
-        # Deduplicate
-        existing = conn.execute("SELECT id FROM articles WHERE url = ?", (url,)).fetchone()
-        if existing:
-            continue
+            existing = conn.execute("SELECT id FROM articles WHERE url = ?", (url,)).fetchone()
+            if existing:
+                continue
 
-        # Fetch full text via trafilatura (NewsAPI free tier truncates content)
-        full_text = fetch_full_text(url) if url else ""
-        time.sleep(2)
-        if not full_text:
-            full_text = content
+            full_text = fetch_full_text(url) if url else ""
+            time.sleep(2)
+            if not full_text:
+                full_text = content
 
-        try:
-            insert_article(conn, iso3, title[:500], source_name,
-                           url[:1000], published[:100], full_text[:50000])
-            count += 1
-        except Exception as e:
-            logger.debug("Skipping NewsAPI article: %s", e)
+            try:
+                insert_article(conn, iso3, title[:500], source_name,
+                               url[:1000], published[:100], full_text[:50000])
+                count += 1
+            except Exception as e:
+                logger.debug("Skipping NewsAPI article: %s", e)
 
-    conn.commit()
-    conn.close()
-    logger.info("Ingested %d NewsAPI articles for %s.", count, iso3)
-    return count
+        conn.commit()
+        logger.info("Ingested %d NewsAPI articles for %s.", count, iso3)
+        return count
+    finally:
+        conn.close()
 
 
 def ingest_all(country_config: dict, skip_gdelt: bool = False) -> dict:

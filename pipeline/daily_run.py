@@ -285,7 +285,7 @@ def run_all():
     try:
         from pipeline.change_detection import detect_all_changes, store_alerts
         conn = get_connection()
-        changes = detect_all_changes(conn, threshold_pct=5.0)
+        changes = detect_all_changes(conn, threshold_pct=2.0)
         store_alerts(conn, changes)
         sig = [c for c in changes if c["is_significant"]]
         if sig:

@@ -54,7 +54,7 @@ def detect_changes(conn, country_iso3: str, threshold_pct: float = 5.0) -> dict:
     }
 
 
-def detect_all_changes(conn, threshold_pct: float = 5.0) -> list:
+def detect_all_changes(conn, threshold_pct: float = 2.0) -> list:
     """
     Run change detection for all active countries.
     Returns list sorted by absolute delta descending.

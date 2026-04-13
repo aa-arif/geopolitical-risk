@@ -40,7 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -271,7 +271,11 @@ def get_prediction_snapshot(date: str = None):
     configs = load_all_country_configs()
 
     if not date:
-        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        # Use the latest prediction date, not current UTC date
+        latest = conn.execute(
+            "SELECT MAX(prediction_date) as d FROM predictions"
+        ).fetchone()
+        date = latest["d"] if latest and latest["d"] else datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
     rows = conn.execute(
         """SELECT p.*,

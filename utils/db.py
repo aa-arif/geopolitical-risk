@@ -4,6 +4,7 @@ Database schema and operations for the geopolitical risk system.
 
 import sqlite3
 import json
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "data" / "geopolitical.db"
@@ -196,24 +197,26 @@ def insert_reasoning_chain(conn, country_iso3: str, article_id: int,
 
 def get_recent_articles(conn, country_iso3: str, days: int = 7) -> list:
     """Get articles from the last N days for a country."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT * FROM articles
            WHERE country_iso3 = ?
-           AND pulled_at >= date('now', ? || ' days')
+           AND pulled_at >= ?
            ORDER BY published_date DESC""",
-        (country_iso3, f"-{days}")
+        (country_iso3, cutoff)
     )
     return [dict(row) for row in cursor.fetchall()]
 
 
 def get_recent_reasoning_chains(conn, country_iso3: str, days: int = 7) -> list:
     """Get reasoning chains from the last N days for a country."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT * FROM reasoning_chains
            WHERE country_iso3 = ?
-           AND created_at >= date('now', ? || ' days')
+           AND created_at >= ?
            ORDER BY created_at DESC""",
-        (country_iso3, f"-{days}")
+        (country_iso3, cutoff)
     )
     return [dict(row) for row in cursor.fetchall()]
 
@@ -288,14 +291,15 @@ def compute_event_threshold(conn, country_iso3: str, months: int = 12) -> float:
     Compute the 90th percentile of monthly ACLED event counts.
     Returns the threshold count above which a month is considered 'instability'.
     """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=months * 30)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT strftime('%Y-%m', event_date) as month, COUNT(*) as cnt
            FROM acled_events
            WHERE country_iso3 = ?
-           AND event_date >= date('now', ? || ' months')
+           AND event_date >= ?
            GROUP BY month
            ORDER BY month""",
-        (country_iso3, f"-{months}")
+        (country_iso3, cutoff)
     )
     rows = cursor.fetchall()
     if not rows:
