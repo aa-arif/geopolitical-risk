@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getCountryDetail, getCountryHistory } from '../api';
+import { getCountryDetail, getCountryHistory, getCountryEvents } from '../api';
 import RiskGauge from '../components/RiskGauge';
 import TimeSeriesChart from '../components/TimeSeriesChart';
 
@@ -206,13 +206,18 @@ export default function CountryDetail() {
   const { iso3 } = useParams();
   const [detail, setDetail] = useState(null);
   const [history, setHistory] = useState(null);
+  const [events, setEvents] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([getCountryDetail(iso3), getCountryHistory(iso3).catch(() => null)])
-      .then(([d, h]) => { setDetail(d); setHistory(h); })
+    Promise.all([
+      getCountryDetail(iso3),
+      getCountryHistory(iso3).catch(() => null),
+      getCountryEvents(iso3, 60).catch(() => null),
+    ])
+      .then(([d, h, ev]) => { setDetail(d); setHistory(h); setEvents(ev?.timeline || null); })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [iso3]);
@@ -263,7 +268,7 @@ export default function CountryDetail() {
         <Card delay={.12}>
           <h4 className="section-label">Prediction History</h4>
           {history?.predictions?.length > 0
-            ? <TimeSeriesChart data={history.predictions} />
+            ? <TimeSeriesChart data={history.predictions} events={events} />
             : <div className="no-data">No historical data</div>}
         </Card>
       </div>

@@ -1,7 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import * as d3 from 'd3';
 
-export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
+export default function TimeSeriesChart({ data, events, width = 600, height = 300 }) {
   const ref = useRef();
 
   useEffect(() => {
@@ -10,7 +10,7 @@ export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
     const svg = d3.select(ref.current);
     svg.selectAll('*').remove();
 
-    const margin = { top: 20, right: 30, bottom: 40, left: 50 };
+    const margin = { top: 20, right: events && events.length > 0 ? 50 : 30, bottom: 40, left: 50 };
     const w = width - margin.left - margin.right;
     const h = height - margin.top - margin.bottom;
 
@@ -28,8 +28,14 @@ export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
 
     parsed.sort((a, b) => a.date - b.date);
 
+    // Combined x domain from predictions and events
+    let xDomainDates = parsed.map(d => d.date);
+    if (events && events.length > 0) {
+      xDomainDates = xDomainDates.concat(events.map(e => new Date(e.date)));
+    }
+
     const xScale = d3.scaleTime()
-      .domain(d3.extent(parsed, (d) => d.date))
+      .domain(d3.extent(xDomainDates))
       .range([0, w]);
 
     const yScale = d3.scaleLinear()
@@ -71,6 +77,34 @@ export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
 
     g.selectAll('.domain').attr('stroke', '#3a4a5e');
     g.selectAll('.tick line').attr('stroke', '#3a4a5e');
+
+    // Event overlay bars (drawn first so lines appear on top)
+    if (events && events.length > 0) {
+      const eventMax = d3.max(events, d => d.events) || 1;
+      const yEvent = d3.scaleLinear().domain([0, eventMax]).range([h, 0]);
+
+      // Right axis
+      const rightAxis = d3.axisRight(yEvent).ticks(3).tickFormat(d3.format('d'));
+      g.append('g').attr('transform', `translate(${w}, 0)`)
+        .call(rightAxis)
+        .selectAll('text').attr('fill', '#6b7280').attr('font-size', '9px');
+
+      g.append('g').attr('transform', `translate(${w}, 0)`)
+        .selectAll('.domain').attr('stroke', '#3a4a5e');
+
+      // Bars
+      const barWidth = Math.max(1, w / events.length - 1);
+      g.selectAll('.event-bar')
+        .data(events)
+        .join('rect')
+        .attr('class', 'event-bar')
+        .attr('x', d => xScale(new Date(d.date)) - barWidth/2)
+        .attr('y', d => yEvent(d.events))
+        .attr('width', barWidth)
+        .attr('height', d => h - yEvent(d.events))
+        .attr('fill', d => d.fatalities > 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.12)')
+        .attr('rx', 1);
+    }
 
     // Line generators
     const lineGen = (accessor) =>
@@ -131,13 +165,24 @@ export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
       { label: 'Fused', color: '#ffd600', dash: null },
     ];
 
+    if (events && events.length > 0) {
+      items.push({ label: 'Events', color: 'rgba(239, 68, 68, 0.5)', dash: null, isRect: true });
+    }
+
     items.forEach((item, i) => {
       const lg = legend.append('g').attr('transform', `translate(${i * 100}, 0)`);
-      lg.append('line')
-        .attr('x1', 0).attr('x2', 20).attr('y1', 0).attr('y2', 0)
-        .attr('stroke', item.color)
-        .attr('stroke-width', 2)
-        .attr('stroke-dasharray', item.dash);
+      if (item.isRect) {
+        lg.append('rect')
+          .attr('x', 0).attr('y', -5).attr('width', 20).attr('height', 10)
+          .attr('fill', item.color)
+          .attr('rx', 2);
+      } else {
+        lg.append('line')
+          .attr('x1', 0).attr('x2', 20).attr('y1', 0).attr('y2', 0)
+          .attr('stroke', item.color)
+          .attr('stroke-width', 2)
+          .attr('stroke-dasharray', item.dash);
+      }
       lg.append('text')
         .attr('x', 24).attr('y', 4)
         .attr('fill', '#b0bec5')
@@ -145,7 +190,7 @@ export default function TimeSeriesChart({ data, width = 600, height = 300 }) {
         .attr('font-family', "'JetBrains Mono', monospace")
         .text(item.label);
     });
-  }, [data, width, height]);
+  }, [data, events, width, height]);
 
   return (
     <svg ref={ref} width={width} height={height} className="ts-chart" style={{ width: '100%', height: 'auto' }} viewBox={`0 0 ${width} ${height}`} />
