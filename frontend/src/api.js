@@ -20,10 +20,23 @@ export function getCountryHistory(iso3) {
   return fetchJSON(`${BASE}/countries/${iso3}/history`);
 }
 
+export function getCountryEvents(iso3, days = 60) {
+  return fetchJSON(`${BASE}/countries/${iso3}/events?days=${days}`);
+}
+
+export function getPredictionSnapshot(date) {
+  const params = date ? `?date=${date}` : '';
+  return fetchJSON(`${BASE}/predictions/snapshot${params}`);
+}
+
 export function getEvaluation() {
   return fetchJSON(`${BASE}/evaluation`);
 }
 
 export function getTrackComparison() {
   return fetchJSON(`${BASE}/evaluation/track-comparison`);
+}
+
+export function getAlerts(days = 30) {
+  return fetchJSON(`${BASE}/alerts?days=${days}`);
 }
