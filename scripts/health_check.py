@@ -79,13 +79,13 @@ def main():
             healthy += 1
 
         if acled_count == 0:
-            status = "NO ACLED"
             if status == "OK":
-                warn_count += 1
+                status = "NO ACLED"
+            warn_count += 1
         if article_count < 5:
             if status == "OK":
                 status = "LOW ARTICLES"
-                warn_count += 1
+            warn_count += 1
 
         print(f"  {iso3}: last prediction {pred_date}, {acled_count} ACLED events, {article_count} articles  {status}")
 
