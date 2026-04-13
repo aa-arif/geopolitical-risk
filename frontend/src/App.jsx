@@ -16,7 +16,7 @@ export default function App() {
         </div>
         <nav className="main-nav">
           <NavLink to="/" end className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
-          <NavLink to="/evaluation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Evaluation</NavLink>
+          <NavLink to="/evaluation" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Predictions</NavLink>
         </nav>
       </header>
       <main className="app-main">
