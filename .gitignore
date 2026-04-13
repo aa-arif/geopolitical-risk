@@ -1,13 +1,18 @@
 .env
 __pycache__/
 *.pyc
+.pytest_cache/
 data/geopolitical.db
 data/geopolitical.db-wal
 data/geopolitical.db-shm
 data/calibration_model.pkl
+data/fusion_weight_override.json
+data/data_gpr_export.xls
 data/articles/
-data/*.xls
-data/*.xlsx
+data/pipeline_logs/
+data/digests/
+data/reports/
+data/resolution_report.json
 node_modules/
 frontend/build/
 frontend/dist/
@@ -15,5 +20,4 @@ frontend/dist/
 *.log
 session.txt
 .claude/
-data/pipeline_logs/
 .gitnexus
