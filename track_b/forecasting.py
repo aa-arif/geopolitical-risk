@@ -210,7 +210,15 @@ def run_ensemble(country_config: dict, track_a_result: dict,
                 }
 
     # Agent 4 gets the preliminary results
-    results.append(forecast_devil(country_config, track_a_result,
-                                  reasoning_summary, acled_data, results[:3]))
+    try:
+        results.append(forecast_devil(country_config, track_a_result,
+                                      reasoning_summary, acled_data, results[:3]))
+    except Exception as e:
+        logger.error("Agent 4 (devil) failed: %s", e)
+        results.append({
+            "final_probability": track_a_result["probability"],
+            "agent_type": "devil",
+            "key_uncertainties": [f"Agent failed: {e}"],
+        })
 
     return results

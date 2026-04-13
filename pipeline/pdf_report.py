@@ -21,6 +21,7 @@ from reportlab.platypus import (
 )
 
 from config.settings import COUNTRIES, load_country_config
+from utils import risk_level as _risk_level
 from utils.db import get_connection, initialize_db, get_prediction_history
 from pipeline.weekly_digest import generate_weekly_digest
 
@@ -38,13 +39,6 @@ YELLOW = HexColor("#eab308")
 GREEN = HexColor("#22c55e")
 
 RISK_COLORS = {"CRITICAL": RED, "HIGH": AMBER, "ELEVATED": YELLOW, "LOW": GREEN}
-
-
-def _risk_level(prob):
-    if prob >= 0.5: return "CRITICAL"
-    elif prob >= 0.3: return "HIGH"
-    elif prob >= 0.15: return "ELEVATED"
-    return "LOW"
 
 
 def generate_pdf_report(conn):

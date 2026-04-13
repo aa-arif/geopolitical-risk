@@ -14,14 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from config.settings import COUNTRIES, load_country_config
+from utils import risk_level as _risk_level
 from utils.db import get_connection, initialize_db, get_prediction_history
-
-
-def _risk_level(prob):
-    if prob >= 0.5: return "CRITICAL"
-    elif prob >= 0.3: return "HIGH"
-    elif prob >= 0.15: return "ELEVATED"
-    return "LOW"
 
 
 def generate_weekly_digest(conn) -> str:
