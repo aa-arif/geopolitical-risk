@@ -170,6 +170,50 @@ export default function Evaluation() {
             <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.7rem'}}>Calibration Curve</h3>
             {evalData?.calibration ? <CalibrationChart data={evalData.calibration} /> : <div className="no-data">No calibration data yet</div>}
           </div>
+          {trackData && trackData.n_resolved > 0 && (
+            <div className="detail-card">
+              <h3 style={{fontSize:'.72rem', fontWeight:700, color:'var(--text-2)', textTransform:'uppercase', letterSpacing:'.1em', marginBottom:'.7rem'}}>Track A vs Track B</h3>
+              <div className="scores-grid">
+                <div className="score-card">
+                  <span className="score-label">Track A Brier</span>
+                  <span className="score-value mono" style={{color:'var(--cyan)'}}>{trackData.track_a_brier?.toFixed(4) ?? '--'}</span>
+                </div>
+                <div className="score-card">
+                  <span className="score-label">Track B Brier</span>
+                  <span className="score-value mono" style={{color:'var(--purple)'}}>{trackData.track_b_brier?.toFixed(4) ?? '--'}</span>
+                </div>
+                <div className="score-card">
+                  <span className="score-label">Fused Brier</span>
+                  <span className="score-value mono" style={{color:'#ffd600'}}>{trackData.fused_brier?.toFixed(4) ?? '--'}</span>
+                </div>
+                <div className="score-card">
+                  <span className="score-label">Best Track</span>
+                  <span className="score-value mono" style={{color: trackData.best_track === 'track_b' ? 'var(--purple)' : 'var(--cyan)'}}>
+                    {trackData.best_track === 'track_a' ? 'Track A' : trackData.best_track === 'track_b' ? 'Track B' : trackData.best_track === 'fused' ? 'Fused' : '--'}
+                  </span>
+                </div>
+              </div>
+              {trackData.per_prediction && trackData.per_prediction.length > 0 && (
+                <table className="eval-table" style={{marginTop:'.8rem', fontSize:'.75rem'}}>
+                  <thead>
+                    <tr><th>Country</th><th>Date</th><th>Brier A</th><th>Brier B</th><th>Brier Fused</th><th>Outcome</th></tr>
+                  </thead>
+                  <tbody>
+                    {trackData.per_prediction.map((p, i) => (
+                      <tr key={i}>
+                        <td>{p.country}</td>
+                        <td className="mono">{p.date}</td>
+                        <td className="mono" style={{color:'var(--cyan)'}}>{p.brier_a?.toFixed(4)}</td>
+                        <td className="mono" style={{color:'var(--purple)'}}>{p.brier_b?.toFixed(4)}</td>
+                        <td className="mono" style={{color:'#ffd600'}}>{p.brier_fused?.toFixed(4)}</td>
+                        <td style={{textAlign:'center'}}>{p.actual === 1 ? '\u2718' : '\u2714'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       )}
     </motion.div>
