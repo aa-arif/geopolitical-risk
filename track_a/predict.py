@@ -64,10 +64,8 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
     # Neighborhood: 0.0 = no conflict, higher = more conflict nearby
     neighbor_adjustment = neighborhood * 1.0
 
-    # GPR: remap from [-1,1] to [0,1] for the adjustment formula
-    # gpr_raw is on [-1, 1] scale; 0.0 = stable
-    gpr_normalized = (gpr_raw + 1.0) / 2.0  # map to 0-1
-    gpr_adjustment = (gpr_normalized - 0.5) * 0.8
+    # GPR: gpr_raw is [-1, 1]; direct scaling
+    gpr_adjustment = gpr_raw * 0.4
 
     combined_logit = (
         base_logit + vuln_adjustment + neighbor_adjustment + gpr_adjustment

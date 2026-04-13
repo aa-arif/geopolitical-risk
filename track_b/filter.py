@@ -26,9 +26,15 @@ RISK_KEYWORDS = [
 
 # Keywords that indicate low relevance (sports, entertainment, etc.)
 NOISE_KEYWORDS = [
-    "cricket", "football match", "bollywood", "nollywood",
-    "celebrity", "entertainment", "recipe", "tourism",
-    "weather forecast", "horoscope",
+    # Sports
+    "cricket", "football match", "soccer match", "basketball",
+    "super lig", "premier league", "world cup qualifier",
+    # Entertainment
+    "bollywood", "nollywood", "turkish drama", "celebrity",
+    "entertainment", "reality show", "music award",
+    # Lifestyle
+    "recipe", "tourism", "travel guide", "hotel review",
+    "weather forecast", "horoscope", "fashion week",
 ]
 
 
@@ -68,6 +74,22 @@ def is_relevant(title: str, text: str, country_config: dict) -> bool:
     return False
 
 
+TIER_1_DOMAINS = [
+    "crisisgroup.org", "csis.org", "brookings.edu", "rand.org",
+    "chathamhouse.org", "iiss.org", "sipri.org", "acleddata.com",
+    "journals.sagepub.com", "academic.oup.com", "jstor.org",
+]
+TIER_2_DOMAINS = [
+    "reuters.com", "bbc.com", "bbc.co.uk", "aljazeera.com",
+    "apnews.com", "france24.com", "dw.com", "theguardian.com",
+    "nytimes.com", "washingtonpost.com", "economist.com",
+    "foreignaffairs.com", "foreignpolicy.com",
+    "dawn.com", "geo.tv", "thedailystar.net", "rappler.com",
+    "punchng.com", "premiumtimesng.com", "hurriyetdailynews.com",
+    "inquirer.net", "dhakatribune.com", "tribune.com.pk",
+]
+
+
 def compute_reliability_tier(source_url: str) -> int:
     """
     Estimate source reliability tier from URL.
@@ -78,27 +100,11 @@ def compute_reliability_tier(source_url: str) -> int:
     """
     url_lower = source_url.lower() if source_url else ""
 
-    tier_1_domains = [
-        "crisisgroup.org", "csis.org", "brookings.edu", "rand.org",
-        "chathamhouse.org", "iiss.org", "sipri.org", "acleddata.com",
-        "journals.sagepub.com", "academic.oup.com", "jstor.org",
-    ]
-    tier_2_domains = [
-        "reuters.com", "bbc.com", "bbc.co.uk", "aljazeera.com",
-        "apnews.com", "france24.com", "dw.com", "theguardian.com",
-        "nytimes.com", "washingtonpost.com", "economist.com",
-        "foreignaffairs.com", "foreignpolicy.com",
-        # Local papers of record (from country configs)
-        "dawn.com", "geo.tv", "thedailystar.net", "rappler.com",
-        "punchng.com", "premiumtimesng.com", "hurriyetdailynews.com",
-        "inquirer.net", "dhakatribune.com", "tribune.com.pk",
-    ]
-
-    for domain in tier_1_domains:
+    for domain in TIER_1_DOMAINS:
         if domain in url_lower:
             return 1
 
-    for domain in tier_2_domains:
+    for domain in TIER_2_DOMAINS:
         if domain in url_lower:
             return 2
 

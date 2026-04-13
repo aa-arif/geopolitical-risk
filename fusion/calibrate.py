@@ -34,7 +34,7 @@ def calibrate(p: float, model: LogisticRegression = None) -> float:
     if model is None:
         return p
 
-    # Platt scaling: logistic regression on log-odds
+    # Platt scaling: logistic regression on raw probability
     X = np.array([[p]])
     calibrated = model.predict_proba(X)[0][1]
     return float(max(0.01, min(0.99, calibrated)))
@@ -57,10 +57,16 @@ def fit_calibration_model(predictions: list, outcomes: list) -> LogisticRegressi
     X = np.array(predictions).reshape(-1, 1)
     y = np.array(outcomes)
 
-    model = LogisticRegression(C=1.0)
-    model.fit(X, y)
+    # Need both classes present for logistic regression
+    if len(set(y)) < 2:
+        return None
 
-    # Save model
+    try:
+        model = LogisticRegression(C=1.0, max_iter=1000)
+        model.fit(X, y)
+    except Exception:
+        return None
+
     CALIBRATION_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
     with open(CALIBRATION_MODEL_PATH, "wb") as f:
         pickle.dump(model, f)

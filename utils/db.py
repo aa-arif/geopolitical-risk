@@ -163,6 +163,18 @@ def initialize_db():
             ON articles(country_iso3);
         CREATE INDEX IF NOT EXISTS idx_predictions_country
             ON predictions(country_iso3, prediction_date);
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_articles_url
+            ON articles(url) WHERE url IS NOT NULL AND url != '';
+
+        CREATE INDEX IF NOT EXISTS idx_agent_outputs_prediction
+            ON agent_outputs(prediction_id);
+        CREATE INDEX IF NOT EXISTS idx_change_alerts_date
+            ON change_alerts(alert_date);
+        CREATE INDEX IF NOT EXISTS idx_reasoning_chains_country_date
+            ON reasoning_chains(country_iso3, created_at);
+        CREATE INDEX IF NOT EXISTS idx_agent_outputs_type_country
+            ON agent_outputs(agent_type, country_iso3);
     """)
     conn.commit()
     conn.close()
@@ -170,28 +182,26 @@ def initialize_db():
 
 def insert_article(conn, country_iso3: str, title: str, source: str,
                    url: str, published_date: str, full_text: str) -> int:
-    """Insert an article and return its ID."""
+    """Insert an article and return its ID. Caller must commit."""
     cursor = conn.execute(
         """INSERT INTO articles (country_iso3, title, source, url,
            published_date, full_text)
            VALUES (?, ?, ?, ?, ?, ?)""",
         (country_iso3, title, source, url, published_date, full_text)
     )
-    conn.commit()
     return cursor.lastrowid
 
 
 def insert_reasoning_chain(conn, country_iso3: str, article_id: int,
                            chain_json: str, prompt_version: str,
                            model_version: str) -> int:
-    """Insert a reasoning chain and return its ID."""
+    """Insert a reasoning chain and return its ID. Caller must commit."""
     cursor = conn.execute(
         """INSERT INTO reasoning_chains
            (country_iso3, article_id, chain_json, prompt_version, model_version)
            VALUES (?, ?, ?, ?, ?)""",
         (country_iso3, article_id, chain_json, prompt_version, model_version)
     )
-    conn.commit()
     return cursor.lastrowid
 
 

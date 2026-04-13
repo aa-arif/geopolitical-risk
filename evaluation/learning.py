@@ -122,7 +122,7 @@ def generate_prompt_feedback(conn) -> str:
     factor_analysis = analyze_factor_predictiveness(conn)
     agent_analysis = analyze_agent_accuracy(conn)
 
-    if factor_analysis["n_resolved"] < 5:
+    if factor_analysis["n_resolved"] < 15:
         return ""  # Not enough data for meaningful feedback
 
     parts = [f"HISTORICAL FEEDBACK (based on {factor_analysis['n_resolved']} resolved predictions):"]

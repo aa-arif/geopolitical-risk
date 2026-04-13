@@ -15,6 +15,9 @@ from utils.logger import logger
 MAX_WEIGHT_CHANGE = 0.05
 MIN_WEIGHT = 0.3
 MAX_WEIGHT = 0.8
+# Note: calibration (fusion/calibrate.py) requires 30 samples.
+# Weight updates start earlier (10) to allow faster adaptation,
+# but calibration won't apply until 30 resolved predictions exist.
 MIN_RESOLVED_FOR_UPDATE = 10
 
 

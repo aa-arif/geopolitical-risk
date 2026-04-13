@@ -28,7 +28,7 @@ def extract_reasoning(article_text: str, country_config: dict) -> dict:
     prompt = template.format(
         country_name=country_config["name"],
         country_context=country_config["risk_context"],
-        article_text=article_text[:8000],
+        article_text=article_text[:8000] + ("\n[TRUNCATED]" if len(article_text) > 8000 else ""),
     )
 
     result = generate(
@@ -120,26 +120,27 @@ def summarize_reasoning_chains(chains: list) -> str:
     if not chains:
         return "No recent causal factors extracted from reporting."
 
-    all_factors = []
     all_counterargs = []
 
+    # Collect factors with their original confidence for proper sorting
+    all_factors_with_conf = []
     for chain in chains:
         chain_data = (
             chain if isinstance(chain, dict)
             else json.loads(chain.get("chain_json", "{}"))
         )
         for factor in chain_data.get("causal_factors", []):
-            direction = factor.get("direction", "increases_risk")
             confidence = factor.get("confidence", 0.5)
+            direction = factor.get("direction", "increases_risk")
             mechanism = factor.get("mechanism", "")
             evidence = factor.get("evidence", "")
             symbol = "+" if direction == "increases_risk" else "-"
-            line = f"  [{symbol}] {factor.get('factor', 'unknown')} (confidence: {confidence:.1f})"
+            line = f"  [{symbol}] {factor.get('factor', 'unknown')} (confidence: {confidence:.2f})"
             if mechanism:
                 line += f"\n      Mechanism: {mechanism}"
             if evidence:
                 line += f"\n      Evidence: {evidence}"
-            all_factors.append(line)
+            all_factors_with_conf.append((confidence, line))
 
         for ca in chain_data.get("counterarguments", []):
             if isinstance(ca, dict):
@@ -154,21 +155,14 @@ def summarize_reasoning_chains(chains: list) -> str:
                 all_counterargs.append(f"  - {ca}")
 
     summary_parts = []
-    if all_factors:
+    if all_factors_with_conf:
         summary_parts.append("CAUSAL FACTORS (from recent reporting):")
-        # Sort by confidence (higher first) before deduplication
-        def _extract_confidence(line):
-            try:
-                idx = line.index("confidence: ")
-                return float(line[idx + 12:idx + 15])
-            except (ValueError, IndexError):
-                return 0.5
-        all_factors.sort(key=_extract_confidence, reverse=True)
+        all_factors_with_conf.sort(key=lambda x: x[0], reverse=True)
 
         seen = set()
         unique_factors = []
-        for f in all_factors:
-            key = f[:50].lower()
+        for conf, f in all_factors_with_conf:
+            key = f[:80].lower()
             if key not in seen:
                 seen.add(key)
                 unique_factors.append(f)

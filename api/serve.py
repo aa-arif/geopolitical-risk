@@ -16,6 +16,7 @@ Endpoints:
 
 import json
 from collections import defaultdict
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
@@ -32,10 +33,18 @@ from evaluation.track_comparison import compare_tracks
 from evaluation.calibration_curve import compute_calibration_curve
 from evaluation.brier import brier_score_aggregate
 
+
+@asynccontextmanager
+async def lifespan(app):
+    initialize_db()
+    yield
+
+
 app = FastAPI(
     title="Geopolitical Risk Prediction API",
     version="1.0.0",
     description="Dual-track geopolitical risk forecasting with reasoning chains",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -45,11 +54,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-def startup():
-    initialize_db()
 
 
 @app.get("/health")
@@ -98,8 +102,11 @@ def list_countries():
                 "brier_score": latest["brier_score"],
             })
         else:
-            track_a_result = predict_track_a(config, conn)
-            track_a_prob = track_a_result["probability"]
+            try:
+                track_a_result = predict_track_a(config, conn)
+                track_a_prob = track_a_result["probability"]
+            except Exception:
+                track_a_prob = None
             results.append({
                 "iso3": iso3,
                 "name": config["name"],
@@ -109,7 +116,7 @@ def list_countries():
                 "confidence": None,
                 "prediction_date": None,
                 "window_end": None,
-                "risk_level": _risk_level(track_a_prob),
+                "risk_level": _risk_level(track_a_prob) if track_a_prob else "LOW",
                 "track_a_only": True,
                 "resolved": False,
                 "actual_outcome": None,

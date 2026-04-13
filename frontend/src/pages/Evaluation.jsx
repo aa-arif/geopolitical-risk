@@ -29,6 +29,7 @@ export default function Evaluation() {
   const [sortCol, setSortCol] = useState('calibrated');
   const [sortDir, setSortDir] = useState(-1);
   const [tab, setTab] = useState('live');
+  const [sliderLoading, setSliderLoading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -46,7 +47,11 @@ export default function Evaluation() {
 
   const handleDateChange = (date) => {
     setSelectedDate(date);
-    getPredictionSnapshot(date).then(setSnapshot).catch(() => {});
+    setSliderLoading(true);
+    getPredictionSnapshot(date)
+        .then(setSnapshot)
+        .catch(() => {})
+        .finally(() => setSliderLoading(false));
   };
 
   const sorted = useMemo(() => {
@@ -120,7 +125,7 @@ export default function Evaluation() {
           </div>
 
           {/* Prediction table */}
-          <div style={{overflowX:'auto'}}>
+          <div style={{overflowX:'auto', opacity: sliderLoading ? 0.5 : 1, transition: 'opacity 0.2s'}}>
             <table className="eval-table" style={{minWidth:'700px'}}>
               <thead>
                 <tr>

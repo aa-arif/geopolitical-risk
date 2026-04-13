@@ -80,39 +80,21 @@ def _get_acled_token() -> str:
     return token
 
 
-# ACLED API uses full country names, not ISO3 codes
-_ISO3_TO_COUNTRY_NAME = {
-    "NGA": "Nigeria",
-    "BGD": "Bangladesh",
-    "PAK": "Pakistan",
-    "PHL": "Philippines",
-    "TUR": "Turkey",
-    "ETH": "Ethiopia",
-    "MMR": "Myanmar",
-    "IRQ": "Iraq",
-    "COL": "Colombia",
-    "SDN": "Sudan",
-    "COD": "Democratic Republic of Congo",
-    "EGY": "Egypt",
-    "THA": "Thailand",
-    "KEN": "Kenya",
-    "UKR": "Ukraine",
-    "SOM": "Somalia",
-    "YEM": "Yemen",
-    "AFG": "Afghanistan",
-    "LBY": "Libya",
-    "MLI": "Mali",
-    "MOZ": "Mozambique",
-    "VEN": "Venezuela",
-    "HTI": "Haiti",
-    "LBN": "Lebanon",
-    "ZAF": "South Africa",
-    "IND": "India",
-    "MEX": "Mexico",
-    "NER": "Niger",
-    "CMR": "Cameroon",
-    "TCD": "Chad",
-}
+# ACLED API uses full country names, not ISO3 codes.
+# Built dynamically from country configs; uses acled_country_name if present.
+_ISO3_TO_COUNTRY_NAME = None
+
+
+def _get_iso3_mapping():
+    """Build ISO3 -> ACLED country name mapping from all available configs."""
+    global _ISO3_TO_COUNTRY_NAME
+    if _ISO3_TO_COUNTRY_NAME is None:
+        from config.settings import load_all_available_country_configs
+        mapping = {}
+        for iso3, cfg in load_all_available_country_configs().items():
+            mapping[iso3] = cfg.get("acled_country_name", cfg["name"])
+        _ISO3_TO_COUNTRY_NAME = mapping
+    return _ISO3_TO_COUNTRY_NAME
 
 
 def ingest_acled(country_iso3: str, days: int = 30) -> int:
@@ -125,7 +107,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
         logger.warning("ACLED credentials not set. Skipping ACLED ingestion.")
         return 0
 
-    country_name = _ISO3_TO_COUNTRY_NAME.get(country_iso3)
+    country_name = _get_iso3_mapping().get(country_iso3)
     if not country_name:
         logger.error("No ACLED country name mapping for %s", country_iso3)
         return 0
