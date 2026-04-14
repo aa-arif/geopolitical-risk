@@ -13,6 +13,7 @@ Runs all system components in order:
 """
 
 import json
+import sqlite3
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
@@ -138,7 +139,7 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
             from evaluation.learning import generate_prompt_feedback
             prompt_feedback = generate_prompt_feedback(conn)
         except Exception:
-            pass
+            logger.debug("Learning feedback generation skipped (no resolved predictions yet).")
 
         # --- Step 4: Track B Ensemble ---
         logger.info("[4/8] Running Track B forecasting ensemble...")
@@ -226,7 +227,7 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
                      f"CONTRADICTION: {contradiction['explanation']}"),
                 )
                 conn.commit()
-            except Exception as e:
+            except sqlite3.OperationalError as e:
                 logger.warning("Failed to store contradiction alert: %s", e)
 
         # --- Evaluate resolved windows ---
@@ -320,7 +321,7 @@ def run_all():
                 logger.info("  %s: %+.1fpp (%s)", c["country_iso3"], c["delta_pct"], c["direction"])
         conn.close()
     except Exception as e:
-        logger.warning("Change detection failed: %s", e)
+        logger.warning("Change detection failed: %s", e, exc_info=True)
 
     # --- Phase 4: Adaptive weight update ---
     try:
@@ -340,7 +341,7 @@ def run_all():
                         FUSION_WEIGHT_TRACK_A, new_weight, update_result["direction"])
         conn.close()
     except Exception as e:
-        logger.warning("Weight update failed: %s", e)
+        logger.warning("Weight update failed: %s", e, exc_info=True)
 
     # --- Phase 5: Calibration model update ---
     try:
@@ -355,7 +356,7 @@ def run_all():
                 logger.info("Calibration model updated with %d resolved predictions", len(preds))
         conn.close()
     except Exception as e:
-        logger.warning("Calibration update failed: %s", e)
+        logger.warning("Calibration update failed: %s", e, exc_info=True)
 
     return results
 

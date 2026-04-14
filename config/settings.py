@@ -39,8 +39,11 @@ if _WEIGHT_OVERRIDE_PATH.exists():
         import json as _json
         _override = _json.loads(_WEIGHT_OVERRIDE_PATH.read_text())
         FUSION_WEIGHT_TRACK_A = _override["fusion_weight_track_a"]
-    except Exception:
-        pass
+    except (json.JSONDecodeError, KeyError, TypeError, OSError) as e:
+        import logging as _logging
+        _logging.getLogger("georisk").warning(
+            "Failed to load fusion weight override from %s: %s", _WEIGHT_OVERRIDE_PATH, e
+        )
 
 # --- Prediction Parameters ---
 PREDICTION_WINDOW_DAYS = 30
@@ -104,6 +107,6 @@ def load_all_available_country_configs() -> dict:
             try:
                 cfg = load_country_config(f.stem)
                 configs[cfg["iso3"]] = cfg
-            except Exception:
+            except (json.JSONDecodeError, KeyError, OSError):
                 pass
     return configs

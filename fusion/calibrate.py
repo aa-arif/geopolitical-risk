@@ -64,7 +64,7 @@ def fit_calibration_model(predictions: list, outcomes: list) -> LogisticRegressi
     try:
         model = LogisticRegression(C=1.0, max_iter=1000)
         model.fit(X, y)
-    except Exception:
+    except (ValueError, np.linalg.LinAlgError):
         return None
 
     CALIBRATION_MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -81,5 +81,5 @@ def _load_model() -> LogisticRegression:
     try:
         with open(CALIBRATION_MODEL_PATH, "rb") as f:
             return pickle.load(f)
-    except Exception:
+    except (FileNotFoundError, pickle.UnpicklingError, EOFError, ValueError):
         return None

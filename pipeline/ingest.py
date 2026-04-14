@@ -5,6 +5,7 @@ Fetches data from ACLED (OAuth), NewsAPI, GDELT, RSS feeds (feedparser + trafila
 
 import json
 import socket
+import sqlite3
 import time
 import urllib.error
 import urllib.request
@@ -149,7 +150,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
 
     try:
         token = _get_acled_token()
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         logger.error("ACLED OAuth failed: %s", e)
         return 0
 
@@ -178,7 +179,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
             )
             resp.raise_for_status()
             data = resp.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             logger.error("ACLED fetch failed for %s (page %d): %s", country_iso3, page, e)
             break
 
@@ -229,7 +230,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
                     ),
                 )
                 count += 1
-            except Exception as e:
+            except sqlite3.IntegrityError as e:
                 logger.debug("Skipping ACLED event: %s", e)
 
         conn.commit()
@@ -296,7 +297,7 @@ def ingest_rss(country_config: dict) -> int:
                         link[:1000], published[:100], full_text[:50000],
                     )
                     total += 1
-                except Exception as e:
+                except sqlite3.IntegrityError as e:
                     logger.debug("Skipping article: %s", e)
 
         conn.commit()
@@ -367,7 +368,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
                 insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
                                art_url[:1000], seen_date, full_text[:50000])
                 count += 1
-            except Exception as e:
+            except sqlite3.IntegrityError as e:
                 logger.debug("Skipping GDELT article: %s", e)
 
         conn.commit()
@@ -450,7 +451,7 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
                      avg_tone, None, None, sample_url[:1000]),
                 )
                 count += 1
-            except Exception as e:
+            except sqlite3.IntegrityError as e:
                 logger.debug("Skipping GDELT daily aggregate: %s", e)
 
         conn.commit()
@@ -494,7 +495,7 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
     except requests.exceptions.SSLError:
         logger.warning("NewsAPI SSL cert invalid -- skipping (external issue).")
         return 0
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         logger.warning("NewsAPI fetch failed for %s: %s", country_name, e)
         return 0
 
@@ -530,7 +531,7 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
                 insert_article(conn, iso3, title[:500], source_name,
                                url[:1000], published[:100], full_text[:50000])
                 count += 1
-            except Exception as e:
+            except sqlite3.IntegrityError as e:
                 logger.debug("Skipping NewsAPI article: %s", e)
 
         conn.commit()

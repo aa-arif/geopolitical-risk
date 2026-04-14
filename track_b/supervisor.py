@@ -1,12 +1,84 @@
 """
 Supervisor agent: reconciles 4 independent forecasting agent outputs
 into a single Track B probability using Claude Opus.
+
+Uses Anthropic tool_use for structured output.
 """
 
 import json
 from config.settings import load_prompt
-from utils.api_client import generate
+from utils.api_client import generate_with_tool
 from utils.logger import logger
+
+
+# --- Tool schema for supervisor structured output ---
+
+_SUPERVISOR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "agreements": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Points where agents agree",
+        },
+        "disagreements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "issue": {"type": "string"},
+                    "agent_positions": {"type": "object"},
+                    "resolution": {"type": "string"},
+                    "stronger_argument": {"type": "string"},
+                },
+                "required": ["issue", "resolution"],
+            },
+        },
+        "errors_identified": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string"},
+                    "error_type": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["agent", "error_type", "explanation"],
+            },
+        },
+        "information_gaps": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "final_probability": {
+            "type": "number",
+            "description": "Reconciled probability as decimal between 0.0 and 1.0 (e.g. 0.23 for 23%)",
+        },
+        "narrative_summary": {
+            "type": "string",
+            "description": "Coherent narrative synthesizing the key reasoning",
+        },
+        "key_risk_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "key_stabilizing_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "confidence": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+        },
+        "executive_summary": {
+            "type": "string",
+            "description": "2-3 sentence plain-English summary. State the risk level, primary driver, and key stabilizing factor.",
+        },
+    },
+    "required": ["agreements", "disagreements", "final_probability",
+                  "narrative_summary", "key_risk_factors", "key_stabilizing_factors",
+                  "confidence", "executive_summary"],
+}
 
 
 def _extract_reasoning_text(agent_result: dict) -> str:
@@ -106,23 +178,27 @@ def reconcile(country_config: dict, track_a_result: dict,
         agent_4_reasoning=_extract_reasoning_text(agents[3]),
     )
 
-    result = generate(
+    result = generate_with_tool(
         prompt=prompt,
+        tool_name="submit_reconciliation",
+        tool_schema=_SUPERVISOR_SCHEMA,
         model="opus",
         temperature=0.2,
         max_tokens=4096,
     )
 
-    # Validate
+    # Validate final_probability
     if "final_probability" not in result:
-        # Fallback: use median of agent probabilities (robust to outliers)
         import statistics
         probs = sorted([a["final_probability"] for a in agents[:4]])
         result["final_probability"] = statistics.median(probs)
 
     p = result["final_probability"]
-    if p > 1.0:
+
+    # Only convert percentage->decimal if fallback to free-text parsing
+    if not result.get("_meta", {}).get("structured", False) and p > 1.0:
         p = p / 100.0
+
     result["final_probability"] = max(0.01, min(0.99, p))
 
     if "confidence" not in result:

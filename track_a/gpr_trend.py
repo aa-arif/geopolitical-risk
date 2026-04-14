@@ -97,7 +97,7 @@ def _load_gpr_data():
         _gpr_cache = data
         return _gpr_cache
 
-    except Exception as e:
+    except (ImportError, ValueError, OSError) as e:
         logger.warning("Failed to load GPR Excel: %s. Using placeholders.", e)
         _gpr_cache = {}
         return _gpr_cache

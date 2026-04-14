@@ -8,13 +8,164 @@ Each agent uses a different reasoning strategy:
 4. Devil's Advocate
 
 All agents receive the Track A probability as their outside-view anchor.
+Uses Anthropic tool_use for structured output (guaranteed valid types/ranges).
 """
 
 import json
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from config.settings import load_prompt
-from utils.api_client import generate
+from utils.api_client import generate_with_tool
 from utils.logger import logger
+
+
+# --- Tool schemas for structured output ---
+
+_BASERATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "base_rate_acknowledged": {
+            "type": "number",
+            "description": "The base rate probability (0.0-1.0) you are anchoring to",
+        },
+        "upward_adjustments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "factor": {"type": "string"},
+                    "magnitude": {"type": "number", "description": "Adjustment magnitude as decimal (e.g. 0.05 for 5pp)"},
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["factor", "magnitude", "reasoning"],
+            },
+        },
+        "downward_adjustments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "factor": {"type": "string"},
+                    "magnitude": {"type": "number", "description": "Adjustment magnitude as decimal (e.g. 0.03 for 3pp)"},
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["factor", "magnitude", "reasoning"],
+            },
+        },
+        "final_probability": {
+            "type": "number",
+            "description": "Final probability as decimal between 0.0 and 1.0 (e.g. 0.23 for 23%)",
+        },
+        "confidence_in_estimate": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["base_rate_acknowledged", "upward_adjustments", "downward_adjustments",
+                  "final_probability", "confidence_in_estimate", "key_uncertainties"],
+}
+
+_ANALOGY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "analogies": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "country": {"type": "string"},
+                    "year": {"type": "integer"},
+                    "situation": {"type": "string"},
+                    "similarity": {"type": "string"},
+                    "difference": {"type": "string"},
+                    "outcome": {"type": "string"},
+                    "implied_probability": {"type": "number"},
+                },
+                "required": ["country", "year", "situation", "similarity",
+                             "difference", "outcome", "implied_probability"],
+            },
+        },
+        "synthesis": {"type": "string"},
+        "final_probability": {
+            "type": "number",
+            "description": "Final probability as decimal between 0.0 and 1.0",
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["analogies", "synthesis", "final_probability", "key_uncertainties"],
+}
+
+_DECOMP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sub_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "probability": {"type": "number", "description": "Sub-question probability as decimal 0.0-1.0"},
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["question", "probability", "reasoning"],
+            },
+        },
+        "combination_logic": {"type": "string"},
+        "final_probability": {
+            "type": "number",
+            "description": "Final probability as decimal between 0.0 and 1.0",
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["sub_questions", "combination_logic", "final_probability", "key_uncertainties"],
+}
+
+_DEVIL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "consensus_challenged": {"type": "string"},
+        "contrarian_arguments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "argument": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "strength": {"type": "string", "enum": ["weak", "moderate", "strong"]},
+                },
+                "required": ["argument", "evidence", "strength"],
+            },
+        },
+        "what_consensus_overweights": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "what_consensus_underweights": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "final_probability": {
+            "type": "number",
+            "description": "Final probability as decimal between 0.0 and 1.0",
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["consensus_challenged", "contrarian_arguments",
+                  "what_consensus_overweights", "what_consensus_underweights",
+                  "final_probability", "key_uncertainties"],
+}
 
 
 def _format_acled_summary(acled_data: dict) -> str:
@@ -55,7 +206,10 @@ def forecast_baserate(country_config: dict, track_a_result: dict,
         acled_summary=_format_acled_summary(acled_data),
     )
 
-    result = generate(prompt=prompt, model="sonnet", temperature=0.3)
+    result = generate_with_tool(
+        prompt=prompt, tool_name="submit_forecast",
+        tool_schema=_BASERATE_SCHEMA, model="sonnet", temperature=0.3,
+    )
     result["agent_type"] = "baserate"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 1 (baserate) for %s: P=%.3f",
@@ -75,7 +229,10 @@ def forecast_analogy(country_config: dict, track_a_result: dict,
         reasoning_chains_summary=reasoning_summary,
     )
 
-    result = generate(prompt=prompt, model="sonnet", temperature=0.4)
+    result = generate_with_tool(
+        prompt=prompt, tool_name="submit_forecast",
+        tool_schema=_ANALOGY_SCHEMA, model="sonnet", temperature=0.4,
+    )
     result["agent_type"] = "analogy"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 2 (analogy) for %s: P=%.3f",
@@ -95,7 +252,10 @@ def forecast_decomposition(country_config: dict, track_a_result: dict,
         reasoning_chains_summary=reasoning_summary,
     )
 
-    result = generate(prompt=prompt, model="sonnet", temperature=0.3)
+    result = generate_with_tool(
+        prompt=prompt, tool_name="submit_forecast",
+        tool_schema=_DECOMP_SCHEMA, model="sonnet", temperature=0.3,
+    )
     result["agent_type"] = "decomposition"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 3 (decomp) for %s: P=%.3f",
@@ -144,7 +304,10 @@ def forecast_devil(country_config: dict, track_a_result: dict,
         acled_summary=_format_acled_summary(acled_data),
     )
 
-    result = generate(prompt=prompt, model="sonnet", temperature=0.5)
+    result = generate_with_tool(
+        prompt=prompt, tool_name="submit_forecast",
+        tool_schema=_DEVIL_SCHEMA, model="sonnet", temperature=0.5,
+    )
     result["agent_type"] = "devil"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 4 (devil) for %s: P=%.3f",
@@ -158,16 +321,17 @@ def _validate_forecast(result: dict, track_a_prob: float = None) -> None:
         result["final_probability"] = 0.15  # default fallback
 
     p = result["final_probability"]
-    # Handle both 0-1 and 0-100 scales
-    if p > 1.0:
+
+    # With tool_use, the model returns a float directly.
+    # But if fallback to free-text parsing occurred, the model may have
+    # returned percentage (e.g. 23.0) instead of decimal (0.23).
+    # Only convert if clearly a percentage (> 1.0).
+    if not result.get("_meta", {}).get("structured", False) and p > 1.0:
         p = p / 100.0
+
     p = max(0.01, min(0.99, p))
 
     # Clamp to within 50pp of Track A if available.
-    # Wide enough for Track B to signal genuine surprises the structural
-    # model misses, while still preventing total hallucination.
-    # The prompt-level constraint (20pp) handles normal anchoring;
-    # this code clamp is a safety net for extreme cases only.
     if track_a_prob is not None:
         max_deviation = 0.50
         p = max(track_a_prob - max_deviation, min(track_a_prob + max_deviation, p))
@@ -206,7 +370,7 @@ def run_ensemble(country_config: dict, track_a_result: dict,
             try:
                 results[idx] = future.result()
             except Exception as e:
-                logger.error("Agent %d failed: %s", idx + 1, e)
+                logger.error("Agent %d failed: %s", idx + 1, e, exc_info=True)
                 results[idx] = {
                     "final_probability": track_a_result["probability"],
                     "agent_type": agent_funcs[idx][0],
@@ -218,7 +382,7 @@ def run_ensemble(country_config: dict, track_a_result: dict,
         results.append(forecast_devil(country_config, track_a_result,
                                       reasoning_summary, acled_data, results[:3]))
     except Exception as e:
-        logger.error("Agent 4 (devil) failed: %s", e)
+        logger.error("Agent 4 (devil) failed: %s", e, exc_info=True)
         results.append({
             "final_probability": track_a_result["probability"],
             "agent_type": "devil",
