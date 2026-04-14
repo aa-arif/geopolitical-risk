@@ -28,7 +28,7 @@ if not logger.handlers:
     logger.addHandler(console_handler)
 
     # File handler (daily rotation by filename)
-    log_file = LOG_DIR / f"pipeline_{datetime.now(timezone.utc).strftime('%Y-%m-%d')}.log"
+    log_file = LOG_DIR / f"pipeline_{datetime.now().astimezone().strftime('%Y-%m-%d')}.log"
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(logging.Formatter(
@@ -44,7 +44,7 @@ def compute_data_hash(country_iso3: str, acled_count: int,
     data_str = (
         f"{country_iso3}:{acled_count}:{article_count}:"
         f"{latest_event_date}:{latest_article_id}:"
-        f"{datetime.now(timezone.utc).date()}"
+        f"{datetime.now().astimezone().date()}"
     )
     return hashlib.sha256(data_str.encode()).hexdigest()[:16]
 

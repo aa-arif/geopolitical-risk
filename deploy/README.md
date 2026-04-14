@@ -1,103 +1,115 @@
-# Linux VPS Deployment Guide
+# Precursion - VPS Deployment Guide
+
+## Quick Start
+
+```bash
+# From your local machine:
+rsync -az --exclude=venv --exclude=node_modules --exclude=.git \
+  . root@YOUR_VPS_IP:/opt/georisk/
+
+# On the VPS:
+ssh root@YOUR_VPS_IP
+bash /opt/georisk/deploy/setup.sh
+cp /opt/georisk/.env.example /opt/georisk/.env
+nano /opt/georisk/.env   # Add your API keys
+systemctl start georisk-api
+```
 
 ## System Requirements
 
+- Ubuntu 24.04 LTS (DigitalOcean $6-12/month droplet)
 - Python 3.11+
+- 2GB RAM recommended
 - ~500MB disk for SQLite database
-- 1GB RAM minimum (2GB recommended for extraction)
-- Network access to Anthropic API, ACLED, GDELT, NewsAPI
+- Network access to: Anthropic API, ACLED, GDELT, NewsAPI
 
-## Setup
+## What the Setup Script Does
 
-```bash
-# Clone and setup
-git clone https://github.com/ayaan6pc-cpu/geopolitical-risk.git /opt/georisk
-cd /opt/georisk
+1. Installs Python 3.12, nginx, ufw
+2. Configures firewall (SSH + HTTP/HTTPS)
+3. Creates `georisk` system user
+4. Sets up Python venv and installs requirements
+5. Initializes the SQLite database
+6. Configures nginx as reverse proxy
+7. Installs systemd service for the API
+8. Installs cron jobs (daily pipeline + weekly digest + health check)
 
-# Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+## Architecture
 
-# Configure environment
-cp .env.example .env
-nano .env  # Add your API keys
-
-# Initialize database
-python -c "from utils.db import initialize_db; initialize_db()"
-
-# Download GPR data
-python -m scripts.download_gpr
-
-# Test Track A
-python -c "
-from utils.db import get_connection
-from track_a.predict import predict_track_a
-from config.settings import load_country_config
-conn = get_connection()
-r = predict_track_a(load_country_config('nigeria'), conn)
-print(f'Nigeria: {r[\"probability\"]:.1%}')
-conn.close()
-"
+```
+Internet -> Cloudflare (TLS) -> nginx (port 80) -> uvicorn (port 8000)
+                                                      |
+                                                      ├── /api/*     -> FastAPI routes
+                                                      ├── /assets/*  -> Static JS/CSS
+                                                      └── /*         -> React SPA (index.html)
 ```
 
-## Cron Setup
+## Environment Variables
 
-```bash
-# Install crontab entries
-crontab deploy/crontab.example
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | Yes | Claude API key for Track B ensemble |
+| `ACLED_EMAIL` | Yes | ACLED data access |
+| `ACLED_PASSWORD` | Yes | ACLED data access |
+| `NEWSAPI_KEY` | Yes | NewsAPI key (supplementary ingestion) |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins (default: localhost) |
+| `DOMAIN` | No | Domain for nginx config (default: precursion.io) |
 
-# Or add manually:
-crontab -e
-# Paste contents of deploy/crontab.example
-```
+## Cron Schedule
 
-## API Server (systemd)
-
-```bash
-# Create service user
-sudo useradd -r -s /bin/false georisk
-
-# Install service
-sudo cp deploy/georisk-api.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable georisk-api
-sudo systemctl start georisk-api
-
-# Check status
-sudo systemctl status georisk-api
-```
+| Time | Task |
+|------|------|
+| 6:00 AM daily | Full prediction pipeline (15 countries) |
+| 9:00 AM daily | Health check |
+| 10:00 AM Sunday | Weekly digest |
 
 ## Monitoring
 
 ```bash
-# Health check (run after pipeline completes)
-python -m scripts.health_check
+# Service status
+systemctl status georisk-api
 
-# Tail today's log
-tail -f data/pipeline_logs/daily_$(date +%Y-%m-%d).log
+# API health
+curl -s localhost:8000/api/health | python3 -m json.tool
 
-# Check DB size
-du -sh data/geopolitical.db
+# Today's pipeline log
+tail -f /opt/georisk/data/pipeline_logs/daily_$(date +%Y-%m-%d).log
 
-# View latest predictions
-curl -s localhost:8000/countries | python -m json.tool
-
-# View alerts
-curl -s localhost:8000/alerts | python -m json.tool
+# DB size
+du -sh /opt/georisk/data/geopolitical.db
 ```
 
-## Nginx Reverse Proxy (optional)
+## Updating
 
-```nginx
-server {
-    listen 80;
-    server_name georisk.yourdomain.com;
+```bash
+# From local machine:
+rsync -az --exclude=venv --exclude=node_modules --exclude=.git \
+  --exclude=data --exclude=.env \
+  . root@YOUR_VPS_IP:/opt/georisk/
 
-    location / {
-        proxy_pass http://127.0.0.1:8000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+# On VPS:
+cd /opt/georisk
+source venv/bin/activate
+pip install -r requirements.txt
+systemctl restart georisk-api
 ```
+
+## DNS + TLS (Cloudflare, recommended)
+
+1. Add your domain to Cloudflare
+2. Create A record pointing to your VPS IP
+3. Enable Cloudflare proxy (orange cloud)
+4. Set SSL mode to "Full"
+5. Update `.env`: `CORS_ORIGINS=https://precursion.io,https://www.precursion.io`
+6. `systemctl restart georisk-api`
+
+## URLs
+
+| Path | Description |
+|------|-------------|
+| `/public` | Read-only public predictions page (for Substack) |
+| `/` | Full dashboard with country detail views |
+| `/evaluation` | Prediction accuracy and track comparison |
+| `/methodology` | System documentation |
+| `/api/health` | API health check |
+| `/api/countries` | JSON: all countries with current predictions |

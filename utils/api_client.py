@@ -102,6 +102,18 @@ def generate(
             time.sleep(wait)
             continue
 
+        except anthropic.APIStatusError as e:
+            if e.status_code == 529:
+                wait = 30 * (attempt + 1)  # 30s, 60s, 90s
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
+                    continue
+                raise
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise
+
         except Exception as e:
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)

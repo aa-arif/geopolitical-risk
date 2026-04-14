@@ -1,8 +1,8 @@
-# GeoRisk Daily Pipeline - 6:00 AM UTC
+# GeoRisk Daily Pipeline - 6:00 AM local time
 0 6 * * * cd /opt/georisk && /opt/georisk/venv/bin/python -m pipeline.daily_run >> /opt/georisk/data/pipeline_logs/daily_$(date +\%Y-\%m-\%d).log 2>&1
 
-# GeoRisk Weekly Digest - Sunday 10:00 AM UTC
+# GeoRisk Weekly Digest - Sunday 10:00 AM local time
 0 10 * * 0 cd /opt/georisk && /opt/georisk/venv/bin/python -m pipeline.weekly_digest >> /opt/georisk/data/pipeline_logs/digest_$(date +\%Y-\%m-\%d).log 2>&1
 
-# GeoRisk Health Check - 9:00 AM UTC (after pipeline completes)
+# GeoRisk Health Check - 9:00 AM local time (after pipeline completes)
 0 9 * * * cd /opt/georisk && /opt/georisk/venv/bin/python -m scripts.health_check >> /opt/georisk/data/pipeline_logs/health_$(date +\%Y-\%m-\%d).log 2>&1

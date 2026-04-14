@@ -24,10 +24,44 @@ from utils.logger import logger
 
 
 def _http_get(url: str, timeout: int = 30) -> str:
-    """Simple HTTP GET with timeout."""
-    req = urllib.request.Request(url, headers={"User-Agent": "GeoRisk/1.0"})
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        return resp.read().decode("utf-8", errors="replace")
+    """Simple HTTP GET with reliable timeout via requests."""
+    resp = requests.get(url, headers={"User-Agent": "GeoRisk/1.0"}, timeout=timeout)
+    resp.raise_for_status()
+    return resp.text
+
+
+def _gdelt_fetch_with_backoff(url: str, iso3: str, label: str = "GDELT") -> dict:
+    """
+    Fetch a GDELT URL with exponential backoff on 429/timeout.
+    Returns parsed JSON dict, or empty dict on failure.
+    """
+    MAX_RETRIES = 4
+    for attempt in range(MAX_RETRIES):
+        try:
+            raw = _http_get(url, timeout=60)
+            return json.loads(raw)
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 429 and attempt < MAX_RETRIES - 1:
+                delay = 30 * (2 ** attempt)  # 30s, 60s, 120s
+                logger.info("%s rate limited for %s, retrying in %ds (attempt %d/%d)...",
+                            label, iso3, delay, attempt + 1, MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            logger.warning("%s fetch failed for %s: %s", label, iso3, e)
+            return {}
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            if attempt < MAX_RETRIES - 1:
+                delay = 20 * (2 ** attempt)  # 20s, 40s, 80s
+                logger.info("%s timeout for %s, retrying in %ds (attempt %d/%d)...",
+                            label, iso3, delay, attempt + 1, MAX_RETRIES)
+                time.sleep(delay)
+                continue
+            logger.warning("%s fetch failed for %s: %s", label, iso3, e)
+            return {}
+        except Exception as e:
+            logger.warning("%s fetch failed for %s: %s", label, iso3, e)
+            return {}
+    return {}
 
 
 def fetch_full_text(url: str) -> str:
@@ -119,7 +153,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
         logger.error("ACLED OAuth failed: %s", e)
         return 0
 
-    start_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    start_date = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     # Paginated fetch -- ACLED caps at 5000 per request
     PAGE_SIZE = 5000
@@ -293,25 +327,10 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
     url = f"{GDELT_API_BASE}?{params}"
 
-    # Delay to avoid 429 when running many countries in parallel
-    time.sleep(5)
+    # Delay to avoid 429 when running many countries sequentially
+    time.sleep(10)
 
-    data = {}
-    for attempt in range(2):
-        try:
-            raw = _http_get(url, timeout=120)
-            data = json.loads(raw)
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt == 0:
-                logger.info("GDELT rate limited for %s, retrying in 30s...", iso3)
-                time.sleep(30)
-                continue
-            logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
-            return 0
-        except Exception as e:
-            logger.warning("GDELT DOC fetch failed for %s: %s", iso3, e)
-            return 0
+    data = _gdelt_fetch_with_backoff(url, iso3, "GDELT DOC")
 
     articles = data.get("articles", [])
     if not articles:
@@ -380,25 +399,10 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
 
     url = f"{GDELT_API_BASE}?{params}"
 
-    # Delay to avoid 429 when running many countries in parallel
-    time.sleep(5)
+    # Delay to avoid 429 when running many countries sequentially
+    time.sleep(10)
 
-    data = {}
-    for attempt in range(2):
-        try:
-            raw = _http_get(url, timeout=120)
-            data = json.loads(raw)
-            break
-        except urllib.error.HTTPError as e:
-            if e.code == 429 and attempt == 0:
-                logger.info("GDELT events rate limited for %s, retrying in 30s...", iso3)
-                time.sleep(30)
-                continue
-            logger.warning("GDELT events fetch failed for %s: %s", iso3, e)
-            return 0
-        except Exception as e:
-            logger.warning("GDELT events fetch failed for %s: %s", iso3, e)
-            return 0
+    data = _gdelt_fetch_with_backoff(url, iso3, "GDELT events")
 
     articles = data.get("articles", [])
     if not articles:
@@ -470,7 +474,7 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
 
     iso3 = country_config["iso3"]
     country_name = country_config["name"]
-    from_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    from_date = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     try:
         resp = requests.get(
@@ -487,6 +491,9 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
         )
         resp.raise_for_status()
         data = resp.json()
+    except requests.exceptions.SSLError:
+        logger.warning("NewsAPI SSL cert invalid -- skipping (external issue).")
+        return 0
     except Exception as e:
         logger.warning("NewsAPI fetch failed for %s: %s", country_name, e)
         return 0

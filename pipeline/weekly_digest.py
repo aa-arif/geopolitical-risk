@@ -20,7 +20,7 @@ from utils.db import get_connection, initialize_db, get_prediction_history
 
 def generate_weekly_digest(conn) -> str:
     """Generate a full weekly digest in markdown format."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     week_ago = (now - timedelta(days=7)).strftime("%Y-%m-%d")
     today = now.strftime("%Y-%m-%d")
 
@@ -148,7 +148,7 @@ def main():
     # Save to file
     digest_dir = Path("data/digests")
     digest_dir.mkdir(parents=True, exist_ok=True)
-    date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    date_str = datetime.now().astimezone().strftime("%Y-%m-%d")
     path = digest_dir / f"weekly_{date_str}.md"
     path.write_text(digest, encoding="utf-8")
 

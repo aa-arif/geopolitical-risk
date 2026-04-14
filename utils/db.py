@@ -228,7 +228,7 @@ def insert_reasoning_chain(conn, country_iso3: str, article_id: int,
 
 def get_recent_articles(conn, country_iso3: str, days: int = 7) -> list:
     """Get articles from the last N days for a country."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT * FROM articles
            WHERE country_iso3 = ?
@@ -241,7 +241,7 @@ def get_recent_articles(conn, country_iso3: str, days: int = 7) -> list:
 
 def get_recent_reasoning_chains(conn, country_iso3: str, days: int = 7) -> list:
     """Get reasoning chains from the last N days for a country."""
-    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
     cursor = conn.execute(
         """SELECT * FROM reasoning_chains
            WHERE country_iso3 = ?
@@ -335,7 +335,7 @@ def compute_event_threshold(conn, country_iso3: str, months: int = 12,
     if before_date:
         end_date = before_date
     else:
-        end_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        end_date = datetime.now().astimezone().strftime("%Y-%m-%d")
 
     cutoff = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=months * 30)).strftime("%Y-%m-%d")
     cursor = conn.execute(

@@ -1,28 +1,34 @@
 """
 FastAPI server for the geopolitical risk prediction system.
 
-Endpoints:
-  GET /countries                    -> all countries with current risk scores
-  GET /countries/{iso3}             -> full detail for a country
-  GET /countries/{iso3}/history     -> time series of predictions
-  GET /countries/{iso3}/events      -> ACLED daily event timeline
-  GET /predictions/snapshot         -> all predictions for a given date
-  GET /evaluation                   -> aggregate Brier scores, calibration
-  GET /evaluation/track-comparison  -> Track A vs B accuracy
-  GET /evaluation/learning          -> factor predictiveness + agent accuracy
-  GET /alerts                       -> change alerts
-  GET /health                       -> system status
+Endpoints (all under /api):
+  GET /api/countries                    -> all countries with current risk scores
+  GET /api/countries/{iso3}             -> full detail for a country
+  GET /api/countries/{iso3}/history     -> time series of predictions
+  GET /api/countries/{iso3}/events      -> ACLED daily event timeline
+  GET /api/predictions/snapshot         -> all predictions for a given date
+  GET /api/evaluation                   -> aggregate Brier scores, calibration
+  GET /api/evaluation/track-comparison  -> Track A vs B accuracy
+  GET /api/evaluation/learning          -> factor predictiveness + agent accuracy
+  GET /api/alerts                       -> change alerts
+  GET /api/health                       -> system status
+
+Also serves the built React frontend from frontend/dist as static files.
 """
 
+import os
 import json
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
-from config.settings import load_all_country_configs, COUNTRIES
+from config.settings import load_all_country_configs, COUNTRIES, PROJECT_ROOT
 from track_a.predict import predict_track_a
 from utils import risk_level as _risk_level
 from utils.db import (
@@ -33,6 +39,9 @@ from utils.db import (
 from evaluation.track_comparison import compare_tracks
 from evaluation.calibration_curve import compute_calibration_curve
 from evaluation.brier import brier_score_aggregate
+
+# --- Static files path ---
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 
 @asynccontextmanager
@@ -48,16 +57,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# --- CORS ---
+_cors_env = os.environ.get("CORS_ORIGINS", "")
+_cors_origins = [o.strip() for o in _cors_env.split(",") if o.strip()] if _cors_env else [
+    "http://localhost:3000", "http://localhost:5173",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# --- API Router (all endpoints under /api) ---
+api = APIRouter(prefix="/api")
 
-@app.get("/health")
+
+@api.get("/health")
 def health():
     conn = get_connection()
     try:
@@ -69,14 +86,14 @@ def health():
 
     return {
         "status": "ok",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now().astimezone().isoformat(),
         "predictions_count": pred_count,
         "articles_count": article_count,
         "acled_events_count": acled_count,
     }
 
 
-@app.get("/countries")
+@api.get("/countries")
 def list_countries():
     configs = load_all_country_configs()
     conn = get_connection()
@@ -133,7 +150,7 @@ def list_countries():
         conn.close()
 
 
-@app.get("/countries/{iso3}")
+@api.get("/countries/{iso3}")
 def get_country(iso3: str):
     iso3 = iso3.upper()
     configs = load_all_country_configs()
@@ -214,7 +231,7 @@ def get_country(iso3: str):
         conn.close()
 
 
-@app.get("/countries/{iso3}/history")
+@api.get("/countries/{iso3}/history")
 def get_country_history(iso3: str, limit: int = 90):
     iso3 = iso3.upper()
     conn = get_connection()
@@ -243,7 +260,7 @@ def get_country_history(iso3: str, limit: int = 90):
         conn.close()
 
 
-@app.get("/countries/{iso3}/events")
+@api.get("/countries/{iso3}/events")
 def get_country_events(iso3: str, days: int = 60):
     iso3 = iso3.upper()
     conn = get_connection()
@@ -287,18 +304,18 @@ def get_country_events(iso3: str, days: int = 60):
         conn.close()
 
 
-@app.get("/predictions/snapshot")
+@api.get("/predictions/snapshot")
 def get_prediction_snapshot(date: str = None):
     conn = get_connection()
     try:
         configs = load_all_country_configs()
 
         if not date:
-            # Use the latest prediction date, not current UTC date
+            # Use the latest prediction date, not current date
             latest = conn.execute(
                 "SELECT MAX(prediction_date) as d FROM predictions"
             ).fetchone()
-            date = latest["d"] if latest and latest["d"] else datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = latest["d"] if latest and latest["d"] else datetime.now().astimezone().strftime("%Y-%m-%d")
 
         rows = conn.execute(
             """SELECT p.*,
@@ -363,7 +380,7 @@ def get_prediction_snapshot(date: str = None):
         conn.close()
 
 
-@app.get("/evaluation")
+@api.get("/evaluation")
 def get_evaluation():
     conn = get_connection()
     try:
@@ -388,7 +405,7 @@ def get_evaluation():
         conn.close()
 
 
-@app.get("/evaluation/track-comparison")
+@api.get("/evaluation/track-comparison")
 def get_track_comparison():
     conn = get_connection()
     try:
@@ -398,7 +415,7 @@ def get_track_comparison():
         conn.close()
 
 
-@app.get("/evaluation/learning")
+@api.get("/evaluation/learning")
 def get_learning():
     from evaluation.learning import analyze_factor_predictiveness, analyze_agent_accuracy
     conn = get_connection()
@@ -410,11 +427,11 @@ def get_learning():
         conn.close()
 
 
-@app.get("/alerts")
+@api.get("/alerts")
 def get_alerts(days: int = 30):
     conn = get_connection()
     try:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
         cursor = conn.execute(
             """SELECT * FROM change_alerts
                WHERE alert_date >= ?
@@ -427,6 +444,26 @@ def get_alerts(days: int = 30):
         return {"alerts": alerts}
     finally:
         conn.close()
+
+
+# --- Mount API router ---
+app.include_router(api)
+
+
+# --- Serve React frontend (production) ---
+if FRONTEND_DIST.exists() and (FRONTEND_DIST / "index.html").exists():
+    # Serve static assets (JS, CSS, images)
+    app.mount("/assets", StaticFiles(directory=str(FRONTEND_DIST / "assets")), name="static-assets")
+
+    # SPA catch-all: any non-API route serves index.html for client-side routing
+    @app.get("/{full_path:path}")
+    async def serve_spa(request: Request, full_path: str):
+        # If a static file exists at the path, serve it
+        file_path = FRONTEND_DIST / full_path
+        if full_path and file_path.exists() and file_path.is_file():
+            return FileResponse(str(file_path))
+        # Otherwise serve index.html for SPA routing
+        return FileResponse(str(FRONTEND_DIST / "index.html"))
 
 
 if __name__ == "__main__":

@@ -109,7 +109,7 @@ def generate_change_alert(change_data: dict, country_config: dict,
 
 def store_alerts(conn, changes: list):
     """Store significant change alerts in the database."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now().astimezone().strftime("%Y-%m-%d")
 
     for change in changes:
         if not change["is_significant"]:

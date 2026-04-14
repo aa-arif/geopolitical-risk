@@ -44,7 +44,7 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
 
     Returns list of resolved prediction dicts.
     """
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now().astimezone().strftime("%Y-%m-%d")
 
     if country_iso3:
         cursor = conn.execute(

@@ -16,7 +16,7 @@ from utils.db import initialize_db, get_connection
 def main():
     initialize_db()
     conn = get_connection()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = datetime.now().astimezone().strftime("%Y-%m-%d")
 
     print(f"=== GeoRisk Health Check ({today}) ===")
     print()
@@ -66,10 +66,10 @@ def main():
         if pred_date == "never":
             status = "NO PREDICTIONS"
             error_count += 1
-        elif pred_date < (datetime.now(timezone.utc).strftime("%Y-%m-%d")[:8] + "01"):  # rough 2-day check
+        elif pred_date < (datetime.now().astimezone().strftime("%Y-%m-%d")[:8] + "01"):  # rough 2-day check
             # More precise: check if older than 2 days
             from datetime import timedelta
-            two_days_ago = (datetime.now(timezone.utc) - timedelta(days=2)).strftime("%Y-%m-%d")
+            two_days_ago = (datetime.now().astimezone() - timedelta(days=2)).strftime("%Y-%m-%d")
             if pred_date < two_days_ago:
                 status = "STALE"
                 warn_count += 1

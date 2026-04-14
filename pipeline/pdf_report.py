@@ -43,7 +43,7 @@ RISK_COLORS = {"CRITICAL": RED, "HIGH": AMBER, "ELEVATED": YELLOW, "LOW": GREEN}
 
 def generate_pdf_report(conn):
     """Generate a branded PDF report from current predictions."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     date_str = now.strftime("%Y-%m-%d")
 
     report_dir = Path("data/reports")

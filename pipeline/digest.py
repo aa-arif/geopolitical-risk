@@ -13,7 +13,7 @@ from utils.db import get_connection, get_prediction_history
 def generate_digest() -> str:
     """Generate a daily digest of all predictions."""
     conn = get_connection()
-    now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    now = datetime.now().astimezone().strftime("%Y-%m-%d")
 
     lines = [
         f"# Geopolitical Risk Digest - {now}",

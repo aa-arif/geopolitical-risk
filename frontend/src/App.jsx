@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard';
 import CountryDetail from './pages/CountryDetail';
 import Evaluation from './pages/Evaluation';
 import Methodology from './pages/Methodology';
+import Public from './pages/Public';
 
 export default function App() {
   const location = useLocation();
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/country/:iso3" element={<CountryDetail />} />
             <Route path="/evaluation" element={<Evaluation />} />
             <Route path="/methodology" element={<Methodology />} />
+            <Route path="/public" element={<Public />} />
           </Routes>
         </AnimatePresence>
       </main>

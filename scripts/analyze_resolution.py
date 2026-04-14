@@ -110,7 +110,7 @@ def main():
 
     # Save report
     report = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now().astimezone().isoformat(),
         "n_resolved": n,
         "base_rate": base_rate,
         "brier_track_a": a_brier,

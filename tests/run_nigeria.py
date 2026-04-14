@@ -122,7 +122,7 @@ def main():
     print("=" * 70)
     print("STEP 6: Save Prediction to Database")
     print("=" * 70)
-    now = datetime.now(timezone.utc)
+    now = datetime.now().astimezone()
     prediction_data = {
         "country_iso3": iso3,
         "prediction_date": now.strftime("%Y-%m-%d"),

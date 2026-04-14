@@ -28,6 +28,7 @@ from utils.db import (
     get_recent_reasoning_chains, get_acled_summary,
     get_latest_event_date, get_latest_article_id,
     compute_event_threshold, insert_agent_outputs,
+    get_resolved_predictions,
 )
 from utils.logger import logger, compute_data_hash, log_prediction
 from utils.api_client import MODELS
@@ -86,7 +87,7 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
         # Committed at prediction time using only pre-prediction data to avoid look-ahead.
         # Uses only violent events (battles, explosions, violence against civilians) with
         # fatalities, decoupled from the broader ACLED data used as model input.
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now().astimezone().strftime("%Y-%m-%d")
         event_threshold = compute_event_threshold(conn, iso3, months=12, before_date=today)
         logger.info("Event threshold (90th pct violent events) for %s: %.0f events/month", iso3, event_threshold)
 
@@ -176,7 +177,7 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
 
         # --- Step 7: Log Prediction ---
         logger.info("[7/8] Logging prediction...")
-        now = datetime.now(timezone.utc)
+        now = datetime.now().astimezone()
         prediction_data = {
             "country_iso3": iso3,
             "prediction_date": now.strftime("%Y-%m-%d"),
@@ -220,7 +221,7 @@ def run_country(country_name: str, skip_gdelt: bool = False) -> dict:
                        (country_iso3, alert_date, previous_probability,
                         current_probability, delta, alert_text)
                        VALUES (?, ?, ?, ?, ?, ?)""",
-                    (iso3, datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    (iso3, datetime.now().astimezone().strftime("%Y-%m-%d"),
                      calibrated_prob, calibrated_prob, 0.0,
                      f"CONTRADICTION: {contradiction['explanation']}"),
                 )
@@ -251,13 +252,34 @@ def run_all():
     Phase 2: Sequential pipeline for all countries (GDELT skipped).
     """
     logger.info("Starting daily pipeline run at %s (%d countries)",
-                datetime.now(timezone.utc).isoformat(), len(COUNTRIES))
+                datetime.now().astimezone().isoformat(), len(COUNTRIES))
 
     initialize_db()
 
     # --- Phase 1: Sequential GDELT pre-seeding ---
-    logger.info("Phase 1: Sequential GDELT ingestion for %d countries...", len(COUNTRIES))
+    # Checkpoint: skip countries that already have today's GDELT data (resume after crash)
+    today = datetime.now().astimezone().strftime("%Y-%m-%d")
+    conn_check = get_connection()
+    already_seeded = set()
     for country_name in COUNTRIES:
+        cfg = load_country_config(country_name)
+        iso3 = cfg["iso3"]
+        row = conn_check.execute(
+            "SELECT COUNT(*) as n FROM articles WHERE country_iso3 = ? AND pulled_at >= ?",
+            (iso3, today),
+        ).fetchone()
+        if row["n"] > 0:
+            already_seeded.add(country_name)
+    conn_check.close()
+
+    remaining = [c for c in COUNTRIES if c not in already_seeded]
+    if already_seeded:
+        logger.info("Phase 1: Skipping %d already-seeded countries, fetching %d remaining...",
+                    len(already_seeded), len(remaining))
+    else:
+        logger.info("Phase 1: Sequential GDELT ingestion for %d countries...", len(COUNTRIES))
+
+    for country_name in remaining:
         try:
             cfg = load_country_config(country_name)
             g_art = ingest_gdelt(cfg, days=7)
@@ -311,7 +333,7 @@ def run_all():
             weight_file = DATA_DIR / "fusion_weight_override.json"
             weight_file.write_text(json_mod.dumps({
                 "fusion_weight_track_a": new_weight,
-                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now().astimezone().isoformat(),
                 "reasoning": update_result["reasoning"],
             }))
             logger.info("Fusion weight updated: %.2f -> %.2f (%s)",
@@ -339,7 +361,14 @@ def run_all():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        run_country(sys.argv[1])
-    else:
-        run_all()
+    try:
+        if len(sys.argv) > 1:
+            run_country(sys.argv[1])
+        else:
+            run_all()
+    except KeyboardInterrupt:
+        logger.info("Pipeline interrupted by user.")
+        sys.exit(1)
+    except Exception as e:
+        logger.error("Pipeline crashed: %s", e, exc_info=True)
+        sys.exit(1)
