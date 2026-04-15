@@ -641,7 +641,7 @@ def run_all():
         conn = get_connection()
         resolved = get_resolved_predictions(conn)
         if resolved:
-            preds = [r["calibrated_probability"] for r in resolved if r["actual_outcome"] is not None]
+            preds = [r["extremized_probability"] for r in resolved if r["actual_outcome"] is not None]
             actuals = [r["actual_outcome"] for r in resolved if r["actual_outcome"] is not None]
             if len(preds) >= 30:
                 fit_calibration_model(preds, actuals)
