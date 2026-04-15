@@ -9,6 +9,7 @@ import json
 from config.settings import load_prompt
 from utils.api_client import generate_with_tool
 from utils.logger import logger
+from utils.validation import validate_probability, validate_event_type_scores
 
 
 # --- Tool schema for supervisor structured output ---
@@ -74,10 +75,33 @@ _SUPERVISOR_SCHEMA = {
             "type": "string",
             "description": "2-3 sentence plain-English summary. State the risk level, primary driver, and key stabilizing factor.",
         },
+        "event_type_scores": {
+            "type": "object",
+            "description": "Reconciled per-event-type probabilities (0.0-1.0 each)",
+            "properties": {
+                "ACE": {"type": "number", "description": "Armed Conflict Escalation"},
+                "MCU": {"type": "number", "description": "Mass Civil Unrest"},
+                "REC": {"type": "number", "description": "Regime/Executive Change"},
+                "PSS": {"type": "number", "description": "Policy/Sanctions Shift"},
+                "CID": {"type": "number", "description": "Critical Infrastructure Disruption"},
+            },
+            "required": ["ACE", "MCU", "REC", "PSS", "CID"],
+        },
+        "event_type_drivers": {
+            "type": "object",
+            "description": "Key driver for each event type with P > 0.10 (1 sentence each)",
+            "properties": {
+                "ACE": {"type": "string"},
+                "MCU": {"type": "string"},
+                "REC": {"type": "string"},
+                "PSS": {"type": "string"},
+                "CID": {"type": "string"},
+            },
+        },
     },
     "required": ["agreements", "disagreements", "final_probability",
                   "narrative_summary", "key_risk_factors", "key_stabilizing_factors",
-                  "confidence", "executive_summary"],
+                  "confidence", "executive_summary", "event_type_scores"],
 }
 
 
@@ -148,25 +172,35 @@ def reconcile(country_config: dict, track_a_result: dict,
         f"Structural vulnerability: {components.get('structural_vulnerability', 0):.3f}\n"
         f"Neighborhood contagion: {components.get('neighborhood_contagion', 0):.3f}\n"
         f"GPR trend: {components.get('gpr_trend', 0):+.2f} ({components.get('gpr_trend_description', 'N/A')})\n"
-        f"ACLED monthly avg: {components.get('acled_avg_monthly', 0):.0f} events\n"
-        f"ACLED floor applied: {components.get('acled_floor_applied', 0)*100:.0f}%"
+        f"Conflict event monthly avg: {components.get('conflict_avg_monthly', components.get('acled_avg_monthly', 0)):.0f} events\n"
+        f"Conflict floor applied: {components.get('conflict_floor_applied', components.get('acled_floor_applied', 0))*100:.0f}%"
     )
 
-    # Format ACLED summary
-    acled_text = "No ACLED data available."
+    # Format event summary (source-agnostic: supports both old by_type and new by_category)
+    event_text = "No conflict event data available."
     if acled_data and acled_data.get("total_events", 0) > 0:
-        acled_text = (
+        event_text = (
             f"Total events (last {acled_data.get('period_days', 30)} days): "
             f"{acled_data['total_events']}, Fatalities: {acled_data.get('total_fatalities', 0)}"
         )
-        for entry in acled_data.get("by_type", [])[:5]:
-            acled_text += f"\n  {entry['event_type']}: {entry['count']} events"
+        for entry in acled_data.get("by_category", acled_data.get("by_type", []))[:5]:
+            label = entry.get("event_category", entry.get("event_type", "unknown"))
+            event_text += f"\n  {label}: {entry['count']} events"
+
+    # Build agent event-type score summary for supervisor
+    agent_et_lines = []
+    for i, a in enumerate(agents[:4]):
+        scores = a.get("event_type_scores", {})
+        if scores:
+            parts = [f"{k}={v:.0%}" for k, v in sorted(scores.items())]
+            agent_et_lines.append(f"  Agent {i+1}: {', '.join(parts)}")
+    agent_et_summary = "\n".join(agent_et_lines) if agent_et_lines else "  No per-type scores available."
 
     prompt = template.format(
         country_name=country_config["name"],
         track_a_probability=f"{track_a_result['probability'] * 100:.1f}",
         track_a_breakdown=track_a_breakdown,
-        acled_summary=acled_text,
+        acled_summary=event_text,
         reasoning_chains_summary=reasoning_summary or "No causal factors extracted.",
         agent_1_probability=f"{agents[0]['final_probability'] * 100:.1f}",
         agent_1_reasoning=_extract_reasoning_text(agents[0]),
@@ -177,6 +211,24 @@ def reconcile(country_config: dict, track_a_result: dict,
         agent_4_probability=f"{agents[3]['final_probability'] * 100:.1f}",
         agent_4_reasoning=_extract_reasoning_text(agents[3]),
     )
+
+    # Append event-type decomposition request
+    prompt += f"""
+
+EVENT-TYPE DECOMPOSITION:
+The four agents provided these per-event-type scores:
+{agent_et_summary}
+
+Reconcile these into final per-event-type probabilities. For each type, assess which agents' scores are most credible and produce a reconciled estimate:
+- ACE (Armed Conflict Escalation): military clashes, bombings, targeted violence
+- MCU (Mass Civil Unrest): large-scale protests, riots, strikes
+- REC (Regime/Executive Change): coup, forced resignation, contested transfer
+- PSS (Policy/Sanctions Shift): new sanctions, trade restrictions, regulatory changes
+- CID (Critical Infrastructure Disruption): attacks on energy, transport, communications
+
+Your overall final_probability should be consistent with your event_type_scores.
+For each type with P > 0.10, provide a one-sentence key driver in event_type_drivers.
+"""
 
     result = generate_with_tool(
         prompt=prompt,
@@ -193,13 +245,8 @@ def reconcile(country_config: dict, track_a_result: dict,
         probs = sorted([a["final_probability"] for a in agents[:4]])
         result["final_probability"] = statistics.median(probs)
 
-    p = result["final_probability"]
-
-    # Only convert percentage->decimal if fallback to free-text parsing
-    if not result.get("_meta", {}).get("structured", False) and p > 1.0:
-        p = p / 100.0
-
-    result["final_probability"] = max(0.01, min(0.99, p))
+    validate_probability(result)
+    validate_event_type_scores(result)
 
     if "confidence" not in result:
         result["confidence"] = "medium"
@@ -208,10 +255,15 @@ def reconcile(country_config: dict, track_a_result: dict,
         result["executive_summary"] = ""
 
     logger.info(
-        "Supervisor reconciled %s: P(B)=%.3f (confidence=%s)",
+        "Supervisor reconciled %s: P(B)=%.3f (confidence=%s) ET=[ACE=%.2f MCU=%.2f REC=%.2f PSS=%.2f CID=%.2f]",
         country_config["iso3"],
         result["final_probability"],
         result["confidence"],
+        result["event_type_scores"].get("ACE", 0),
+        result["event_type_scores"].get("MCU", 0),
+        result["event_type_scores"].get("REC", 0),
+        result["event_type_scores"].get("PSS", 0),
+        result["event_type_scores"].get("CID", 0),
     )
 
     return result

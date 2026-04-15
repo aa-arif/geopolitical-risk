@@ -1,69 +1,180 @@
 """
 Automated prediction resolution.
-When a 30-day prediction window closes, determine if political violence
-exceeded the pre-committed threshold.
 
-Resolution uses only VIOLENT ACLED events (Battles, Explosions/Remote
-violence, Violence against civilians) with fatalities > 0. This is
-deliberately decoupled from the broader ACLED data used as model input
-(which includes protests, strategic developments, etc.) to avoid
-circular evaluation.
+When a 30-day prediction window closes, determine if the predicted
+event type occurred by checking the unified conflict_events table.
 
-The threshold is committed at prediction time and stored immutably in
-the predictions table, preventing look-ahead contamination.
+Source-agnostic: resolution queries conflict_events (which aggregates
+GDELT, internal LLM-classified events, and any future sources) using
+the EVENT_TYPE_RESOLUTION config to determine per-type thresholds
+and counting rules.
+
+For 'composite' predictions (V1 backward compat), resolves using
+ACE events with fatalities (the closest match to the original
+"significant political instability" criterion).
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
 
-from utils.db import compute_event_threshold
+from config.settings import EVENT_TYPE_RESOLUTION, CALIBRATED_EVENT_TYPES
+from utils.db import (
+    get_event_count, compute_event_threshold_by_category,
+    compute_event_threshold,
+)
 from evaluation.brier import brier_score
 from utils.logger import logger
 
-# GDELT threshold: if no ACLED data, use GDELT conflict event count.
-# GDELT events are less curated, so threshold is higher.
-GDELT_INSTABILITY_THRESHOLD = 100
 
-# Resolution event filter: only these ACLED event types count toward
-# the instability outcome. This decouples resolution from the broader
-# ACLED data used as model input.
-RESOLUTION_EVENT_TYPES = (
-    "Battles",
-    "Explosions/Remote violence",
-    "Violence against civilians",
-)
+def _resolve_by_threshold(conn, iso3, pred_date, window_end,
+                           event_category, config,
+                           stored_threshold=None):
+    """
+    Resolve a prediction using the percentile_90 threshold method.
+
+    Uses stored_threshold if available (committed at prediction time
+    to prevent look-ahead). Falls back to recomputation for older
+    predictions that predate threshold storage.
+
+    Returns resolution dict or None if no data.
+    """
+    require_fatalities = config.get("require_fatalities", False)
+
+    event_count = get_event_count(
+        conn, iso3, pred_date, window_end,
+        event_category=event_category,
+        require_fatalities=require_fatalities,
+    )
+
+    # Prefer stored threshold (no look-ahead); recompute as fallback
+    if stored_threshold is not None and stored_threshold > 0:
+        threshold = stored_threshold
+    else:
+        threshold = compute_event_threshold_by_category(
+            conn, iso3, event_category,
+            require_fatalities=require_fatalities,
+            months=12, before_date=pred_date,
+        )
+
+    if threshold <= 0 and event_count == 0:
+        return None  # no data to resolve against
+
+    actual_outcome = 1 if event_count > threshold else 0
+    return {
+        "actual_outcome": actual_outcome,
+        "event_count": event_count,
+        "threshold": threshold,
+        "resolution_source": f"conflict_events_{event_category}",
+    }
+
+
+def _resolve_by_occurrence(conn, iso3, pred_date, window_end,
+                            event_category, config):
+    """
+    Resolve a prediction using the occurrence method (binary: did it happen?).
+    Returns resolution dict or None.
+    """
+    event_count = get_event_count(
+        conn, iso3, pred_date, window_end,
+        event_category=event_category,
+    )
+
+    actual_outcome = 1 if event_count > 0 else 0
+    return {
+        "actual_outcome": actual_outcome,
+        "event_count": event_count,
+        "threshold": 0,
+        "resolution_source": f"conflict_events_{event_category}",
+    }
+
+
+def _resolve_composite_legacy(conn, iso3, pred_date, window_end, stored_threshold):
+    """
+    Resolve a composite/V1 prediction for backward compatibility.
+
+    Tries conflict_events (ACE with fatalities) first, then falls back
+    to the legacy ACLED-based resolution for old predictions.
+    """
+    # Primary: unified conflict_events (ACE = armed conflict)
+    ace_count = get_event_count(
+        conn, iso3, pred_date, window_end,
+        event_category="ACE", require_fatalities=True,
+    )
+
+    if ace_count > 0 and stored_threshold and stored_threshold > 0:
+        return {
+            "actual_outcome": 1 if ace_count > stored_threshold else 0,
+            "event_count": ace_count,
+            "threshold": stored_threshold,
+            "resolution_source": "conflict_events_ACE",
+        }
+
+    # Fallback: legacy ACLED events (for old predictions before migration)
+    acled_cursor = conn.execute(
+        """SELECT COUNT(*) as cnt FROM acled_events
+           WHERE country_iso3 = ?
+           AND event_date >= ? AND event_date <= ?
+           AND event_type IN ('Battles', 'Explosions/Remote violence',
+                              'Violence against civilians')
+           AND fatalities > 0""",
+        (iso3, pred_date, window_end),
+    )
+    acled_count = acled_cursor.fetchone()["cnt"]
+
+    if acled_count > 0 and stored_threshold and stored_threshold > 0:
+        return {
+            "actual_outcome": 1 if acled_count > stored_threshold else 0,
+            "event_count": acled_count,
+            "threshold": stored_threshold,
+            "resolution_source": "acled_violent_legacy",
+        }
+
+    # Last resort: GDELT conflict events
+    gdelt_cursor = conn.execute(
+        """SELECT COALESCE(SUM(num_articles), 0) as cnt
+           FROM gdelt_conflict_events
+           WHERE country_iso3 = ?
+           AND event_date >= ? AND event_date <= ?""",
+        (iso3, pred_date, window_end),
+    )
+    gdelt_count = gdelt_cursor.fetchone()["cnt"]
+    if gdelt_count > 0:
+        return {
+            "actual_outcome": 1 if gdelt_count > 100 else 0,
+            "event_count": gdelt_count,
+            "threshold": 100,
+            "resolution_source": "gdelt_legacy",
+        }
+
+    return None
 
 
 def resolve_expired_predictions(conn, country_iso3: str = None):
     """
     Check all expired prediction windows and resolve them.
 
-    Resolution criterion: did the count of violent ACLED events
-    (battles, explosions, attacks on civilians) with fatalities
-    exceed the pre-committed 90th-percentile threshold during the
-    prediction window?
+    Supports both:
+    - V2 per-event-type predictions (resolved against EVENT_TYPE_RESOLUTION config)
+    - V1 composite predictions (resolved using legacy ACE/ACLED fallback)
 
     Returns list of resolved prediction dicts.
     """
     now = datetime.now().astimezone().strftime("%Y-%m-%d")
 
+    params = [now]
+    country_filter = ""
     if country_iso3:
-        cursor = conn.execute(
-            """SELECT id, country_iso3, prediction_date, window_end_date,
-                      calibrated_probability, event_threshold
-               FROM predictions
-               WHERE resolved = FALSE AND window_end_date <= ?
-               AND country_iso3 = ?""",
-            (now, country_iso3),
-        )
-    else:
-        cursor = conn.execute(
-            """SELECT id, country_iso3, prediction_date, window_end_date,
-                      calibrated_probability, event_threshold
-               FROM predictions
-               WHERE resolved = FALSE AND window_end_date <= ?""",
-            (now,),
-        )
+        country_filter = "AND country_iso3 = ?"
+        params.append(country_iso3)
 
+    cursor = conn.execute(
+        f"""SELECT id, country_iso3, prediction_date, window_end_date,
+                   calibrated_probability, event_threshold,
+                   COALESCE(event_type, 'composite') as event_type
+            FROM predictions
+            WHERE resolved = FALSE AND window_end_date <= ?
+            {country_filter}""",
+        params,
+    )
     expired = [dict(row) for row in cursor.fetchall()]
 
     if not expired:
@@ -76,60 +187,47 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         pred_date = pred["prediction_date"]
         window_end = pred["window_end_date"]
         calibrated_p = pred["calibrated_probability"]
+        event_type = pred["event_type"]
 
-        # Use stored threshold (committed at prediction time).
-        # Fall back to recomputation only for old predictions that predate this fix.
-        threshold = pred.get("event_threshold") or compute_event_threshold(
-            conn, iso3, months=12, before_date=pred_date
-        )
+        resolution = None
 
-        # Count only violent events with fatalities -- decoupled from model input
-        placeholders = ",".join("?" for _ in RESOLUTION_EVENT_TYPES)
-        acled_cursor = conn.execute(
-            f"""SELECT COUNT(*) as cnt FROM acled_events
-               WHERE country_iso3 = ?
-               AND event_date >= ? AND event_date <= ?
-               AND event_type IN ({placeholders})
-               AND fatalities > 0""",
-            (iso3, pred_date, window_end) + RESOLUTION_EVENT_TYPES,
-        )
-        acled_count = acled_cursor.fetchone()["cnt"]
-
-        # Try GDELT conflict events as fallback (sum articles, not row count)
-        gdelt_cursor = conn.execute(
-            """SELECT COALESCE(SUM(num_articles), 0) as cnt FROM gdelt_conflict_events
-               WHERE country_iso3 = ?
-               AND event_date >= ? AND event_date <= ?""",
-            (iso3, pred_date, window_end),
-        )
-        gdelt_count = gdelt_cursor.fetchone()["cnt"]
-
-        # Determine resolution source and outcome
-        resolution_source = None
-        actual_outcome = None
-        event_count = 0
-
-        if acled_count > 0 and threshold > 0:
-            # Primary: ACLED violent events with fatalities
-            resolution_source = "acled_violent"
-            event_count = acled_count
-            actual_outcome = 1 if acled_count > threshold else 0
-        elif gdelt_count > 0:
-            # Fallback: GDELT conflict events
-            resolution_source = "gdelt"
-            event_count = gdelt_count
-            actual_outcome = 1 if gdelt_count > GDELT_INSTABILITY_THRESHOLD else 0
-            logger.info(
-                "Using GDELT fallback for %s pred %d (ACLED violent=%d, GDELT=%d)",
-                iso3, pred["id"], acled_count, gdelt_count,
+        if event_type == "composite":
+            # V1 backward compat
+            resolution = _resolve_composite_legacy(
+                conn, iso3, pred_date, window_end, pred.get("event_threshold"),
             )
+        elif event_type in EVENT_TYPE_RESOLUTION:
+            config = EVENT_TYPE_RESOLUTION[event_type]
+            method = config.get("threshold_method")
+
+            if method == "percentile_90":
+                resolution = _resolve_by_threshold(
+                    conn, iso3, pred_date, window_end, event_type, config,
+                    stored_threshold=pred.get("event_threshold"),
+                )
+            elif method == "occurrence":
+                resolution = _resolve_by_occurrence(
+                    conn, iso3, pred_date, window_end, event_type, config,
+                )
+            else:
+                # PSS, CID: no automated resolution
+                logger.debug(
+                    "Skipping resolution for %s/%s (no threshold_method).",
+                    iso3, event_type,
+                )
+                continue
         else:
+            logger.warning("Unknown event_type '%s' for prediction %d.", event_type, pred["id"])
+            continue
+
+        if resolution is None:
             logger.warning(
-                "No ACLED or GDELT data for %s (pred %d, %s to %s). Skipping.",
-                iso3, pred["id"], pred_date, window_end,
+                "No event data for %s/%s (pred %d, %s to %s). Skipping.",
+                iso3, event_type, pred["id"], pred_date, window_end,
             )
             continue
 
+        actual_outcome = resolution["actual_outcome"]
         bs = brier_score(calibrated_p, actual_outcome)
 
         conn.execute(
@@ -140,24 +238,25 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         )
 
         logger.info(
-            "Resolved prediction %d for %s (%s to %s) via %s: "
+            "Resolved prediction %d for %s/%s (%s to %s) via %s: "
             "events=%d threshold=%s outcome=%d brier=%.4f",
-            pred["id"], iso3, pred_date, window_end, resolution_source,
-            event_count,
-            f"{threshold:.0f}" if resolution_source == "acled" else f"{GDELT_INSTABILITY_THRESHOLD}",
+            pred["id"], iso3, event_type, pred_date, window_end,
+            resolution["resolution_source"],
+            resolution["event_count"], resolution["threshold"],
             actual_outcome, bs,
         )
 
         resolved.append({
             "id": pred["id"],
             "country_iso3": iso3,
+            "event_type": event_type,
             "prediction_date": pred_date,
             "window_end_date": window_end,
-            "event_count": event_count,
-            "threshold": threshold if resolution_source == "acled" else GDELT_INSTABILITY_THRESHOLD,
+            "event_count": resolution["event_count"],
+            "threshold": resolution["threshold"],
             "actual_outcome": actual_outcome,
             "brier_score": bs,
-            "resolution_source": resolution_source,
+            "resolution_source": resolution["resolution_source"],
         })
 
     conn.commit()

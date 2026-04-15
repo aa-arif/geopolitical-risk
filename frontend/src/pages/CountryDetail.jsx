@@ -8,6 +8,8 @@ import TimeSeriesChart from '../components/TimeSeriesChart';
 const RISK_COLORS = { CRITICAL: '#ef4444', HIGH: '#f59e0b', ELEVATED: '#eab308', LOW: '#22c55e' };
 const AGENT_LABELS = { baserate: 'Base Rate', analogy: 'Historical Analogy', decomposition: 'Decomposition', devil: "Devil's Advocate" };
 const AGENT_COLORS = { baserate: '#38bdf8', analogy: '#a78bfa', decomposition: '#22c55e', devil: '#f59e0b' };
+const ET_NAMES = { ACE: 'Armed Conflict', MCU: 'Civil Unrest', REC: 'Regime Change', PSS: 'Policy/Sanctions', CID: 'Infrastructure' };
+const ET_COLORS = { ACE: '#ef4444', MCU: '#f59e0b', REC: '#a78bfa', PSS: '#38bdf8', CID: '#64748b' };
 
 function Card({ children, delay = 0 }) {
   return (
@@ -173,13 +175,105 @@ function TrackBreakdown({ components }) {
   );
 }
 
-function ACLEDSummary({ acled }) {
-  if (!acled || typeof acled !== 'object') return null;
+function EventTypeBreakdown({ scores }) {
+  if (!scores || Object.keys(scores).length === 0) return null;
+  const types = ['ACE', 'MCU', 'REC', 'PSS', 'CID'];
   return (
     <div>
-      <h4 className="section-label">ACLED Events (Last {acled.period_days || 30} Days)</h4>
+      <h4 className="section-label">Event Type Breakdown</h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem' }}>
+        {types.map((et) => {
+          const data = scores[et];
+          if (!data) return null;
+          const prob = typeof data === 'object' ? data.probability : data;
+          const pct = Math.round((prob || 0) * 100);
+          const color = ET_COLORS[et] || '#888';
+          const level = pct >= 60 ? 'CRITICAL' : pct >= 40 ? 'HIGH' : pct >= 20 ? 'ELEVATED' : 'LOW';
+          return (
+            <div key={et} style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
+              <span style={{ width: '105px', fontSize: '.7rem', fontWeight: 600, color: '#94a3b8' }}>
+                {ET_NAMES[et] || et}
+              </span>
+              <div style={{ flex: 1, height: '18px', background: 'rgba(255,255,255,.03)', borderRadius: '4px', overflow: 'hidden', position: 'relative' }}>
+                <motion.div
+                  initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                  transition={{ duration: 1, ease: [.4,0,.2,1], delay: .1 }}
+                  style={{ height: '100%', background: `linear-gradient(90deg, ${color}66, ${color})`, borderRadius: '4px' }} />
+              </div>
+              <span className="mono" style={{ width: '36px', textAlign: 'right', fontSize: '.78rem', fontWeight: 700, color }}>{pct}%</span>
+              <span style={{ fontSize: '.55rem', fontWeight: 700, color: RISK_COLORS[level], width: '55px', textAlign: 'right' }}>{level}</span>
+            </div>
+          );
+        })}
+      </div>
+      {scores.ACE?.driver && (
+        <div style={{ marginTop: '.6rem', fontSize: '.68rem', color: '#64748b', lineHeight: '1.5' }}>
+          {Object.entries(scores).filter(([, v]) => typeof v === 'object' && v.driver).map(([et, v]) => (
+            <div key={et}><span style={{ color: ET_COLORS[et], fontWeight: 600 }}>{ET_NAMES[et]}:</span> {v.driver}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailyBrief({ brief }) {
+  if (!brief) return null;
+  return (
+    <div>
+      <h4 className="section-label">Today's Brief</h4>
+      <div style={{
+        padding: '.85rem 1rem', background: 'rgba(56,189,248,.03)',
+        border: '1px solid rgba(56,189,248,.08)', borderRadius: '10px',
+      }}>
+        <div style={{ fontWeight: 700, fontSize: '.82rem', color: '#e2e8f0', marginBottom: '.4rem' }}>
+          {brief.headline}
+        </div>
+        <div style={{ fontSize: '.75rem', lineHeight: '1.65', color: '#94a3b8', whiteSpace: 'pre-wrap' }}>
+          {brief.body}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecentAlerts({ alerts }) {
+  if (!alerts || alerts.length === 0) return null;
+  return (
+    <div>
+      <h4 className="section-label">Alerts (Last 7 Days)</h4>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '.25rem' }}>
+        {alerts.map((a, i) => {
+          const rising = a.delta > 0;
+          const color = rising ? '#ef4444' : '#22c55e';
+          return (
+            <div key={i} style={{
+              padding: '.45rem .7rem', display: 'flex', alignItems: 'center', gap: '.5rem',
+              background: `${color}08`, border: `1px solid ${color}15`, borderRadius: '6px',
+            }}>
+              <span className="mono" style={{ color, fontWeight: 700, fontSize: '.7rem' }}>
+                {rising ? '\u2191' : '\u2193'} {(a.delta * 100).toFixed(1)}pp
+              </span>
+              <span style={{ fontSize: '.55rem', fontWeight: 600, color: ET_COLORS[a.event_type] || '#888', textTransform: 'uppercase' }}>
+                {a.event_type}
+              </span>
+              <span style={{ flex: 1, fontSize: '.7rem', color: '#94a3b8' }}>{a.brief}</span>
+              <span className="mono" style={{ fontSize: '.55rem', color: '#475569' }}>{a.date}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ConflictEventSummary({ data }) {
+  if (!data || typeof data !== 'object') return null;
+  return (
+    <div>
+      <h4 className="section-label">Conflict Events (Last {data.period_days || 30} Days)</h4>
       <div className="acled-stats">
-        {Object.entries(acled).filter(([k]) => k !== 'by_type').map(([key, val]) => (
+        {Object.entries(data).filter(([k]) => !['by_type', 'by_category'].includes(k)).map(([key, val]) => (
           <div key={key} className="acled-stat">
             <span className="label">{key.replace(/_/g, ' ')}</span>
             <span className="mono">{typeof val === 'number' ? val.toLocaleString() : String(val)}</span>
@@ -290,11 +384,14 @@ export default function CountryDetail() {
       </div>
 
       <div className="detail-sections">
-        <Card delay={.16}><TrackBreakdown components={reasoning.track_a_components} /></Card>
-        <Card delay={.20}><AgentOutputs agents={detail.agent_outputs} /></Card>
+        <Card delay={.14}><EventTypeBreakdown scores={detail.event_type_scores} /></Card>
+        <Card delay={.16}><DailyBrief brief={detail.daily_brief} /></Card>
+        <Card delay={.18}><RecentAlerts alerts={detail.alerts_7d} /></Card>
+        <Card delay={.20}><TrackBreakdown components={reasoning.track_a_components} /></Card>
+        <Card delay={.22}><AgentOutputs agents={detail.agent_outputs} /></Card>
         <Card delay={.24}><ReasoningChains chains={detail.reasoning_chains} narrative={reasoning.narrative} /></Card>
-        <Card delay={.28}><ACLEDSummary acled={detail.acled_30d} /></Card>
-        <Card delay={.32}><KeyActors actors={detail.key_actors} /></Card>
+        <Card delay={.26}><ConflictEventSummary data={detail.conflict_events_30d} /></Card>
+        <Card delay={.28}><KeyActors actors={detail.key_actors} /></Card>
       </div>
     </motion.div>
   );

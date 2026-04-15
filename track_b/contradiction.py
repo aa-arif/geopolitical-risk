@@ -1,12 +1,14 @@
 """
 Contradiction monitor: checks whether new data contradicts the current
 risk assessment. Uses heuristics first, LLM only when anomalous.
+
+Queries the unified conflict_events table (source-agnostic).
 """
 
 import json
 from config.settings import load_prompt
 from utils.api_client import generate
-from utils.db import get_acled_summary
+from utils.db import get_event_summary
 from utils.logger import logger
 
 
@@ -19,9 +21,9 @@ def check_contradiction_heuristic(country_iso3: str, current_probability: float,
     Returns:
         Dict with assessment and whether to trigger full LLM analysis.
     """
-    # Get last 7 days vs last 90 days baseline
-    recent = get_acled_summary(db_conn, country_iso3, days=7)
-    baseline = get_acled_summary(db_conn, country_iso3, days=90)
+    # Get last 7 days vs last 90 days baseline from unified conflict_events
+    recent = get_event_summary(db_conn, country_iso3, days=7)
+    baseline = get_event_summary(db_conn, country_iso3, days=90)
 
     recent_count = recent["total_events"]
     baseline_weekly_avg = baseline["total_events"] / 13.0 if baseline["total_events"] > 0 else 0

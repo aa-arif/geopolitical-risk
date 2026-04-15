@@ -72,16 +72,17 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
     )
     combined = float(np.clip(_from_logit(combined_logit), 0.02, 0.95))
 
-    # ACLED-based floor: prevents underestimation for countries with
+    # Conflict event floor: prevents underestimation for countries with
     # ongoing armed conflict that the polity score doesn't capture
-    # (e.g. Philippines: democracy but active insurgency)
-    acled_floor = 0.0
-    avg_monthly_events = _get_avg_monthly_events(db_conn, country_config["iso3"])
+    # (e.g. Philippines: democracy but active insurgency).
+    # Queries the unified conflict_events table (source-agnostic).
+    conflict_floor = 0.0
+    avg_monthly_events = _get_avg_monthly_conflict_events(db_conn, country_config["iso3"])
     if avg_monthly_events > 100:
-        acled_floor = 0.12
+        conflict_floor = 0.12
     elif avg_monthly_events > 50:
-        acled_floor = 0.08
-    combined = max(combined, acled_floor)
+        conflict_floor = 0.08
+    combined = max(combined, conflict_floor)
 
     return {
         "probability": combined,
@@ -91,18 +92,21 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
             "neighborhood_contagion": neighborhood,
             "gpr_trend": gpr_raw,
             "gpr_trend_description": gpr_description,
-            "acled_avg_monthly": avg_monthly_events,
-            "acled_floor_applied": acled_floor,
+            "conflict_avg_monthly": avg_monthly_events,
+            "conflict_floor_applied": conflict_floor,
         },
     }
 
 
-def _get_avg_monthly_events(db_conn, country_iso3: str) -> float:
-    """Average monthly ACLED event count across all available data."""
+def _get_avg_monthly_conflict_events(db_conn, country_iso3: str) -> float:
+    """
+    Average monthly conflict event count from the unified conflict_events table.
+    Source-agnostic: counts events from all sources (GDELT, internal, etc.)
+    """
     cursor = db_conn.execute(
         """SELECT COUNT(*) as total,
                   COUNT(DISTINCT strftime('%Y-%m', event_date)) as months
-           FROM acled_events
+           FROM conflict_events
            WHERE country_iso3 = ?""",
         (country_iso3,),
     )

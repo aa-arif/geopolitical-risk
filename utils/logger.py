@@ -53,25 +53,26 @@ def log_prediction(db_conn, prediction_data: dict) -> int:
     """Log a complete prediction with all metadata. Returns prediction ID."""
     cursor = db_conn.execute(
         """INSERT OR REPLACE INTO predictions
-        (country_iso3, prediction_date, window_end_date,
+        (country_iso3, prediction_date, window_end_date, event_type,
          track_a_probability, track_b_probability, fused_probability,
          extremized_probability, calibrated_probability,
          reasoning_summary, prompt_versions_json, model_versions_json,
          data_snapshot_hash, event_threshold)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             prediction_data["country_iso3"],
             prediction_data["prediction_date"],
             prediction_data["window_end_date"],
+            prediction_data.get("event_type", "composite"),
             prediction_data["track_a"],
             prediction_data["track_b"],
             prediction_data["fused"],
             prediction_data["extremized"],
             prediction_data["calibrated"],
             json.dumps(prediction_data["reasoning"]),
-            json.dumps(prediction_data["prompt_versions"]),
-            json.dumps(prediction_data["model_versions"]),
-            prediction_data["data_hash"],
+            json.dumps(prediction_data.get("prompt_versions", {})),
+            json.dumps(prediction_data.get("model_versions", {})),
+            prediction_data.get("data_hash", ""),
             prediction_data.get("event_threshold"),
         ),
     )
@@ -79,9 +80,10 @@ def log_prediction(db_conn, prediction_data: dict) -> int:
     prediction_id = cursor.lastrowid
 
     logger.info(
-        "Prediction logged (id=%d): %s P=%.3f (A=%.3f, B=%.3f, fused=%.3f)",
+        "Prediction logged (id=%d): %s/%s P=%.3f (A=%.3f, B=%.3f, fused=%.3f)",
         prediction_id,
         prediction_data["country_iso3"],
+        prediction_data.get("event_type", "composite"),
         prediction_data["calibrated"],
         prediction_data["track_a"],
         prediction_data["track_b"],

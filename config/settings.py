@@ -22,6 +22,8 @@ ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ACLED_EMAIL = os.environ.get("ACLED_EMAIL", "")
 ACLED_PASSWORD = os.environ.get("ACLED_PASSWORD", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+ALERT_FROM_EMAIL = os.environ.get("ALERT_FROM_EMAIL", "alerts@precursion.ai")
 
 # --- LLM Model Versions (pinned for reproducibility) ---
 MODEL_SONNET = "claude-sonnet-4-20250514"
@@ -50,12 +52,86 @@ PREDICTION_WINDOW_DAYS = 30
 ACLED_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
 NEIGHBORHOOD_LOOKBACK_DAYS = 90
 
+# --- Event Type Resolution (source-agnostic) ---
+# Maps each event type to data source config for resolution.
+# Sources: 'gdelt' (CAMEO-coded), 'internal' (LLM-classified articles).
+# threshold_method: 'percentile_90' (count exceeds 90th pct) or 'occurrence' (binary).
+EVENT_TYPE_RESOLUTION = {
+    "ACE": {
+        "name": "Armed Conflict Escalation",
+        "sources": ["gdelt", "internal"],
+        "gdelt_query_terms": ["conflict", "military", "attack", "violence", "battle"],
+        "internal_categories": ["armed_clash", "bombing", "shelling", "targeted_violence"],
+        "require_fatalities": True,
+        "threshold_method": "percentile_90",
+    },
+    "MCU": {
+        "name": "Mass Civil Unrest",
+        "sources": ["gdelt", "internal"],
+        "gdelt_query_terms": ["protest", "riot", "strike", "demonstration"],
+        "internal_categories": ["protest", "riot", "strike", "demonstration"],
+        "require_fatalities": False,
+        "threshold_method": "percentile_90",
+    },
+    "REC": {
+        "name": "Regime / Executive Change",
+        "sources": ["gdelt", "internal"],
+        "gdelt_query_terms": ["coup", "government change", "resignation", "succession"],
+        "internal_categories": ["coup", "forced_resignation", "emergency_succession",
+                                "contested_transfer"],
+        "require_fatalities": False,
+        "threshold_method": "occurrence",
+    },
+    "PSS": {
+        "name": "Policy / Sanctions Shift",
+        "sources": ["internal"],
+        "internal_categories": ["sanctions", "trade_restriction", "regulatory_change",
+                                "policy_reversal"],
+        "require_fatalities": False,
+        "threshold_method": None,  # qualitative only -- no automated resolution
+    },
+    "CID": {
+        "name": "Critical Infrastructure Disruption",
+        "sources": ["internal"],
+        "internal_categories": ["infrastructure_attack", "power_outage", "port_closure",
+                                "telecom_disruption", "financial_system_failure"],
+        "require_fatalities": False,
+        "threshold_method": None,  # qualitative only -- no automated resolution
+    },
+}
+
+# Event categories eligible for calibrated probability scores and Brier scoring.
+# PSS and CID are qualitative-only until reliable resolution methods exist.
+CALIBRATED_EVENT_TYPES = ["ACE", "MCU", "REC"]
+
 # --- Countries ---
 COUNTRIES = [
     "nigeria", "bangladesh", "pakistan", "philippines", "turkey",
     "ethiopia", "myanmar", "iraq", "colombia", "sudan",
     "ukraine", "somalia", "yemen", "egypt", "kenya",
+    # Iran-Gulf Energy Corridor (V2 vertical)
+    "iran", "saudiarabia", "uae", "kuwait", "bahrain", "qatar", "oman",
 ]
+
+# --- Verticals ---
+# Named subsets of countries with sector-specific framing.
+VERTICALS = {
+    "iran_gulf": {
+        "name": "Iran-Gulf Energy Corridor",
+        "countries": ["iran", "iraq", "saudiarabia", "uae", "kuwait",
+                      "bahrain", "qatar", "oman", "yemen"],
+        "sectors": {
+            "energy": "Oil/gas supply, refinery operations, pipeline security, LNG shipments",
+            "shipping": "Strait of Hormuz transit, war-risk insurance, re-routing costs",
+            "finance": "Currency stability, sovereign debt, sanctions exposure",
+            "security": "Personnel safety, facility protection, evacuation planning",
+        },
+        "anchor_assessment": "Strait of Hormuz transit risk",
+        "description": "Nine countries spanning the Persian Gulf energy corridor, "
+                       "including the Strait of Hormuz chokepoint through which ~20% "
+                       "of global oil supply transits.",
+    },
+}
 
 # --- Prompt Versions ---
 PROMPT_VERSIONS = {

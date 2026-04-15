@@ -87,6 +87,7 @@ def initialize_db():
             country_iso3 TEXT NOT NULL,
             prediction_date TEXT NOT NULL,
             window_end_date TEXT NOT NULL,
+            event_type TEXT DEFAULT 'composite',
             track_a_probability REAL,
             track_b_probability REAL,
             fused_probability REAL,
@@ -129,6 +130,33 @@ def initialize_db():
         CREATE INDEX IF NOT EXISTS idx_gdelt_conflict_country_date
             ON gdelt_conflict_events(country_iso3, event_date);
 
+        CREATE TABLE IF NOT EXISTS conflict_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_iso3 TEXT NOT NULL,
+            event_date TEXT NOT NULL,
+            event_category TEXT NOT NULL,
+            event_type TEXT,
+            sub_event_type TEXT,
+            source TEXT NOT NULL,
+            fatalities INTEGER DEFAULT 0,
+            severity TEXT,
+            num_articles INTEGER DEFAULT 1,
+            avg_tone REAL,
+            latitude REAL,
+            longitude REAL,
+            source_url TEXT,
+            source_article_id INTEGER,
+            actors TEXT,
+            confidence REAL,
+            notes TEXT,
+            pulled_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_conflict_events_country_date
+            ON conflict_events(country_iso3, event_date);
+        CREATE INDEX IF NOT EXISTS idx_conflict_events_category
+            ON conflict_events(country_iso3, event_category, event_date);
+
         CREATE TABLE IF NOT EXISTS change_alerts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             country_iso3 TEXT NOT NULL,
@@ -137,6 +165,54 @@ def initialize_db():
             current_probability REAL,
             delta REAL,
             alert_text TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS alerts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_iso3 TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            alert_date TEXT NOT NULL,
+            trigger_type TEXT NOT NULL,
+            previous_probability REAL,
+            current_probability REAL,
+            delta REAL,
+            brief_text TEXT,
+            reasoning_summary TEXT,
+            sector_implications TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_alerts_country_date
+            ON alerts(country_iso3, alert_date);
+
+        CREATE TABLE IF NOT EXISTS briefs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            country_iso3 TEXT NOT NULL,
+            brief_date TEXT NOT NULL,
+            brief_type TEXT NOT NULL,
+            headline TEXT,
+            body_markdown TEXT,
+            event_type_scores TEXT,
+            key_drivers TEXT,
+            sector_implications TEXT,
+            source_prediction_ids TEXT,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_briefs_country_date
+            ON briefs(country_iso3, brief_date);
+
+        CREATE TABLE IF NOT EXISTS subscribers (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL UNIQUE,
+            name TEXT,
+            organization TEXT,
+            countries TEXT,
+            event_types TEXT,
+            sectors TEXT,
+            tier TEXT DEFAULT 'free',
+            active BOOLEAN DEFAULT TRUE,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -180,10 +256,19 @@ def initialize_db():
             ON gdelt_conflict_events(country_iso3, event_date, event_type, latitude, longitude);
     """)
 
+    # --- Migration: add event_type column if missing (V2 schema) ---
+    try:
+        conn.execute("SELECT event_type FROM predictions LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE predictions ADD COLUMN event_type TEXT DEFAULT 'composite'")
+        conn.commit()
+
     # Deduplicate predictions before creating unique index (keep latest id per group)
+    # Groups by (country, date, event_type) to support V2 per-type predictions
     conn.execute("""
         DELETE FROM predictions WHERE id NOT IN (
-            SELECT MAX(id) FROM predictions GROUP BY country_iso3, prediction_date
+            SELECT MAX(id) FROM predictions
+            GROUP BY country_iso3, prediction_date, COALESCE(event_type, 'composite')
         )
     """)
     # Deduplicate gdelt_conflict_events before creating unique index
@@ -193,9 +278,22 @@ def initialize_db():
             GROUP BY country_iso3, event_date, event_type, latitude, longitude
         )
     """)
+    # Deduplicate conflict_events before creating unique index
+    conn.execute("""
+        DELETE FROM conflict_events WHERE id NOT IN (
+            SELECT MAX(id) FROM conflict_events
+            GROUP BY country_iso3, event_date, event_category, source, latitude, longitude
+        )
+    """)
+
+    # Migrate predictions unique index: drop old (country, date) and create
+    # new (country, date, event_type) to support V2 per-type predictions.
     conn.executescript("""
+        DROP INDEX IF EXISTS idx_predictions_unique;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_unique
-            ON predictions(country_iso3, prediction_date);
+            ON predictions(country_iso3, prediction_date, COALESCE(event_type, 'composite'));
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_conflict_events_unique
+            ON conflict_events(country_iso3, event_date, event_category, source, latitude, longitude);
     """)
     conn.commit()
     conn.close()
@@ -285,6 +383,157 @@ def get_acled_summary(conn, country_iso3: str, days: int = 30) -> dict:
         "by_type": rows,
         "period_days": days,
     }
+
+
+def get_event_summary(conn, country_iso3: str, days: int = 30,
+                      event_category: str = None) -> dict:
+    """
+    Get conflict event summary from the unified conflict_events table.
+
+    Source-agnostic: queries all sources (GDELT, internal, etc.)
+    over the most recent N days of available data.
+
+    Args:
+        event_category: Optional filter (ACE, MCU, REC, PSS, CID).
+                        If None, returns all categories.
+    """
+    # Find the latest event date for this country
+    latest_row = conn.execute(
+        "SELECT MAX(event_date) as d FROM conflict_events WHERE country_iso3 = ?",
+        (country_iso3,)
+    ).fetchone()
+    latest_date = latest_row["d"] if latest_row else None
+
+    if not latest_date:
+        return {"total_events": 0, "total_fatalities": 0,
+                "by_category": [], "period_days": days}
+
+    params = [country_iso3, latest_date, f"-{days}"]
+    category_filter = ""
+    if event_category:
+        category_filter = "AND event_category = ?"
+        params.append(event_category)
+
+    cursor = conn.execute(
+        f"""SELECT event_category, COUNT(*) as count,
+                   SUM(fatalities) as total_fatalities
+            FROM conflict_events
+            WHERE country_iso3 = ?
+            AND event_date >= date(?, ? || ' days')
+            {category_filter}
+            GROUP BY event_category
+            ORDER BY count DESC""",
+        params,
+    )
+    rows = [dict(r) for r in cursor.fetchall()]
+    total_events = sum(r["count"] for r in rows)
+    total_fatalities = sum(r["total_fatalities"] or 0 for r in rows)
+    return {
+        "total_events": total_events,
+        "total_fatalities": total_fatalities,
+        "by_category": rows,
+        "period_days": days,
+    }
+
+
+def get_event_count(conn, country_iso3: str, start_date: str,
+                    end_date: str, event_category: str = None,
+                    require_fatalities: bool = False) -> int:
+    """
+    Count conflict events in a date range. Used by resolution.
+
+    Args:
+        event_category: Filter by ACE/MCU/REC/PSS/CID.
+        require_fatalities: If True, only count events with fatalities > 0.
+    """
+    params = [country_iso3, start_date, end_date]
+    filters = ["country_iso3 = ?", "event_date >= ?", "event_date <= ?"]
+
+    if event_category:
+        filters.append("event_category = ?")
+        params.append(event_category)
+    if require_fatalities:
+        filters.append("fatalities > 0")
+
+    where = " AND ".join(filters)
+    cursor = conn.execute(
+        f"SELECT COUNT(*) as cnt FROM conflict_events WHERE {where}",
+        params,
+    )
+    return cursor.fetchone()["cnt"]
+
+
+def compute_event_threshold_by_category(conn, country_iso3: str,
+                                         event_category: str,
+                                         require_fatalities: bool = False,
+                                         months: int = 12,
+                                         before_date: str = None) -> float:
+    """
+    Compute 90th percentile of monthly event counts for a specific
+    event category from the unified conflict_events table.
+
+    Source-agnostic replacement for compute_event_threshold().
+    """
+    if before_date:
+        end_date = before_date
+    else:
+        end_date = datetime.now().astimezone().strftime("%Y-%m-%d")
+
+    cutoff = (datetime.strptime(end_date, "%Y-%m-%d") - timedelta(days=months * 30)).strftime("%Y-%m-%d")
+
+    params = [country_iso3, cutoff, end_date, event_category]
+    fatality_filter = "AND fatalities > 0" if require_fatalities else ""
+
+    cursor = conn.execute(
+        f"""SELECT strftime('%Y-%m', event_date) as month, COUNT(*) as cnt
+            FROM conflict_events
+            WHERE country_iso3 = ?
+            AND event_date >= ? AND event_date < ?
+            AND event_category = ?
+            {fatality_filter}
+            GROUP BY month
+            ORDER BY month""",
+        params,
+    )
+    rows = cursor.fetchall()
+    if not rows:
+        return 0.0
+
+    import numpy as np
+    counts = [r["cnt"] for r in rows]
+    return float(np.percentile(counts, 90))
+
+
+def insert_conflict_event(conn, country_iso3: str, event_date: str,
+                           event_category: str, source: str,
+                           event_type: str = None, sub_event_type: str = None,
+                           fatalities: int = 0, severity: str = None,
+                           num_articles: int = 1, avg_tone: float = None,
+                           latitude: float = None, longitude: float = None,
+                           source_url: str = None, source_article_id: int = None,
+                           actors: str = None, confidence: float = None,
+                           notes: str = None) -> int:
+    """Insert a conflict event into the unified table. Caller must commit."""
+    cursor = conn.execute(
+        """INSERT INTO conflict_events
+           (country_iso3, event_date, event_category, event_type, sub_event_type,
+            source, fatalities, severity, num_articles, avg_tone,
+            latitude, longitude, source_url, source_article_id,
+            actors, confidence, notes)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(country_iso3, event_date, event_category, source,
+                       latitude, longitude)
+           DO UPDATE SET
+               fatalities = MAX(conflict_events.fatalities, excluded.fatalities),
+               num_articles = excluded.num_articles,
+               avg_tone = excluded.avg_tone,
+               notes = excluded.notes""",
+        (country_iso3, event_date, event_category, event_type, sub_event_type,
+         source, fatalities, severity, num_articles, avg_tone,
+         latitude, longitude, source_url, source_article_id,
+         actors, confidence, notes),
+    )
+    return cursor.lastrowid
 
 
 def get_prediction_history(conn, country_iso3: str, limit: int = 90) -> list:
@@ -406,3 +655,166 @@ def get_agent_outputs(conn, prediction_id: int) -> list:
         (prediction_id,),
     )
     return [dict(row) for row in cursor.fetchall()]
+
+
+def get_latest_predictions_all(conn, event_type: str = "composite") -> list:
+    """
+    Get the most recent prediction for every country, in one query.
+    Replaces the N+1 loop in list_countries().
+    """
+    cursor = conn.execute(
+        """SELECT * FROM predictions
+           WHERE id IN (
+               SELECT MAX(id) FROM predictions
+               WHERE event_type = ?
+               GROUP BY country_iso3
+           )
+           ORDER BY calibrated_probability DESC""",
+        (event_type,),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def get_event_type_predictions(conn, country_iso3: str,
+                                 prediction_date: str = None) -> list:
+    """
+    Get all event-type predictions for a country on a given date.
+    If no date, uses the most recent prediction date.
+    """
+    if not prediction_date:
+        row = conn.execute(
+            """SELECT MAX(prediction_date) as d FROM predictions
+               WHERE country_iso3 = ? AND event_type = 'composite'""",
+            (country_iso3,),
+        ).fetchone()
+        prediction_date = row["d"] if row and row["d"] else None
+        if not prediction_date:
+            return []
+
+    cursor = conn.execute(
+        """SELECT event_type, calibrated_probability, track_a_probability,
+                  track_b_probability, fused_probability, reasoning_summary
+           FROM predictions
+           WHERE country_iso3 = ? AND prediction_date = ?
+           AND event_type != 'composite'
+           ORDER BY calibrated_probability DESC""",
+        (country_iso3, prediction_date),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def get_latest_brief(conn, country_iso3: str) -> dict:
+    """Get the most recent daily brief for a country."""
+    cursor = conn.execute(
+        """SELECT * FROM briefs
+           WHERE country_iso3 = ?
+           ORDER BY brief_date DESC
+           LIMIT 1""",
+        (country_iso3,),
+    )
+    row = cursor.fetchone()
+    return dict(row) if row else None
+
+
+def get_latest_briefs_all(conn, brief_type: str = "daily_summary") -> list:
+    """Get today's briefs for all countries, one query."""
+    cursor = conn.execute(
+        """SELECT * FROM briefs
+           WHERE id IN (
+               SELECT MAX(id) FROM briefs
+               WHERE brief_type = ?
+               GROUP BY country_iso3
+           )
+           ORDER BY brief_date DESC""",
+        (brief_type,),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def get_recent_alerts_v2(conn, country_iso3: str = None,
+                          days: int = 30) -> list:
+    """Get alerts from the V2 alerts table (per-event-type)."""
+    cutoff = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
+    if country_iso3:
+        cursor = conn.execute(
+            """SELECT * FROM alerts
+               WHERE country_iso3 = ? AND alert_date >= ?
+               ORDER BY alert_date DESC, ABS(delta) DESC""",
+            (country_iso3, cutoff),
+        )
+    else:
+        cursor = conn.execute(
+            """SELECT * FROM alerts
+               WHERE alert_date >= ?
+               ORDER BY alert_date DESC, ABS(delta) DESC""",
+            (cutoff,),
+        )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+# --- Subscriber management ---
+
+def insert_subscriber(conn, email: str, name: str = None,
+                       organization: str = None,
+                       countries: list = None, event_types: list = None,
+                       sectors: list = None, tier: str = "free") -> int:
+    """Insert a subscriber. Returns subscriber ID."""
+    cursor = conn.execute(
+        """INSERT INTO subscribers
+           (email, name, organization, countries, event_types, sectors, tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+        (email, name, organization,
+         json.dumps(countries or ["all"]),
+         json.dumps(event_types or ["all"]),
+         json.dumps(sectors or ["all"]),
+         tier),
+    )
+    conn.commit()
+    return cursor.lastrowid
+
+
+def get_active_subscribers(conn) -> list:
+    """Get all active subscribers."""
+    cursor = conn.execute(
+        "SELECT * FROM subscribers WHERE active = TRUE ORDER BY created_at",
+    )
+    rows = []
+    for r in cursor.fetchall():
+        row = dict(r)
+        for field in ("countries", "event_types", "sectors"):
+            try:
+                row[field] = json.loads(row[field]) if row[field] else ["all"]
+            except (json.JSONDecodeError, TypeError):
+                row[field] = ["all"]
+        rows.append(row)
+    return rows
+
+
+def get_matched_subscribers(conn, country_iso3: str,
+                              event_type: str) -> list:
+    """
+    Get subscribers whose preferences match a specific alert.
+
+    A subscriber matches if:
+    - Their countries list contains the ISO3 code or "all"
+    - Their event_types list contains the event type or "all"
+    - They are active
+    """
+    subscribers = get_active_subscribers(conn)
+    matched = []
+    for sub in subscribers:
+        country_match = "all" in sub["countries"] or country_iso3 in sub["countries"]
+        et_match = "all" in sub["event_types"] or event_type in sub["event_types"]
+        if country_match and et_match:
+            matched.append(sub)
+    return matched
+
+
+def delete_subscriber(conn, subscriber_id: int) -> bool:
+    """Deactivate a subscriber. Returns True if found."""
+    cursor = conn.execute(
+        "UPDATE subscribers SET active = FALSE WHERE id = ?",
+        (subscriber_id,),
+    )
+    conn.commit()
+    return cursor.rowcount > 0

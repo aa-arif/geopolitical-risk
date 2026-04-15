@@ -1,0 +1,38 @@
+{
+  "name": "Saudi Arabia",
+  "acled_country_code": "SAU",
+  "iso3": "SAU",
+  "polity_code": -10,
+  "polity_category": "autocracy",
+  "infant_mortality_per_1000": 6.0,
+  "gdp_per_capita_usd": 23000,
+  "population_millions": 36.9,
+  "terrain_ruggedness": "low",
+  "years_since_last_instability": 10,
+  "neighboring_countries": ["IRQ", "JOR", "KWT", "BHR", "QAT", "ARE", "OMN", "YEM"],
+  "v_dem_liberal_democracy_index": 0.05,
+  "v_dem_electoral_democracy_index": 0.08,
+  "gpr_country_variant": true,
+  "key_actors": [
+    "Crown Prince Mohammed bin Salman",
+    "King Salman bin Abdulaziz",
+    "Saudi Aramco",
+    "Ministry of Defense",
+    "General Intelligence Presidency"
+  ],
+  "risk_context": "Vision 2030 economic diversification amid concentrated monarchical power under MBS. Key OPEC+ swing producer with strategic rivalry against Iran and ongoing involvement in Yemen security dynamics.",
+  "news_sources_rss": [
+    "https://www.aljazeera.com/xml/rss/all.xml",
+    "https://www.reuters.com/arc/outboundfeeds/v3/all/rss.xml",
+    "https://www.arabnews.com/rss.xml"
+  ],
+  "event_threshold_90th_percentile": null,
+  "data_sources": {
+    "polity_code": "Polity V 2023",
+    "infant_mortality_per_1000": "World Bank WDI 2023",
+    "gdp_per_capita_usd": "World Bank WDI 2023",
+    "v_dem_liberal_democracy_index": "V-Dem v14 2024",
+    "v_dem_electoral_democracy_index": "V-Dem v14 2024",
+    "population_millions": "World Bank WDI 2023"
+  }
+}

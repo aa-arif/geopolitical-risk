@@ -20,8 +20,43 @@ from config.settings import (
     ACLED_API_BASE, ACLED_TOKEN_URL, ACLED_EMAIL, ACLED_PASSWORD,
     GDELT_API_BASE, NEWSAPI_KEY,
 )
-from utils.db import get_connection, insert_article
+from utils.db import get_connection, insert_article, insert_conflict_event
 from utils.logger import logger
+
+
+# --- GDELT article -> event category keyword mapping ---
+# Used for lightweight heuristic classification of GDELT articles into
+# event categories. The full LLM classification (pipeline/classify.py)
+# produces higher-quality labels; this is a fast first pass.
+_GDELT_CATEGORY_KEYWORDS = {
+    "ACE": ["battle", "airstrike", "bombing", "shelling", "attack", "military",
+            "clash", "offensive", "missile", "drone strike", "ambush", "killed",
+            "soldier", "troops", "combat", "artillery", "war ", "fighting"],
+    "MCU": ["protest", "riot", "demonstrat", "rally", "march", "strike",
+            "unrest", "dissent", "tear gas", "water cannon", "crowd"],
+    "REC": ["coup", "overthrow", "resign", "impeach", "succession",
+            "government change", "martial law", "emergency decree",
+            "power transfer", "junta"],
+}
+
+
+def _classify_gdelt_article(title: str) -> str:
+    """
+    Classify a GDELT article title into an event category.
+    Returns 'ACE', 'MCU', 'REC', or 'ACE' as default (conflict-related
+    articles that don't clearly match MCU/REC are assumed ACE since the
+    GDELT query already filters for conflict terms).
+    """
+    title_lower = title.lower()
+    scores = {}
+    for category, keywords in _GDELT_CATEGORY_KEYWORDS.items():
+        scores[category] = sum(1 for kw in keywords if kw in title_lower)
+
+    if scores.get("REC", 0) > 0:
+        return "REC"
+    if scores.get("MCU", 0) > scores.get("ACE", 0):
+        return "MCU"
+    return "ACE"  # default for conflict-query articles
 
 
 def _http_get(url: str, timeout: int = 30) -> str:
@@ -75,6 +110,68 @@ def fetch_full_text(url: str) -> str:
     except Exception as e:
         logger.warning("Failed to fetch full text from %s: %s", url, e)
     return ""
+
+
+def _extract_domain(url: str) -> str:
+    """Extract domain from a URL for per-domain rate limiting."""
+    try:
+        from urllib.parse import urlparse
+        return urlparse(url).netloc
+    except Exception:
+        return "unknown"
+
+
+def fetch_full_texts_parallel(urls: list, max_workers: int = 5,
+                                per_domain_delay: float = 1.0) -> dict:
+    """
+    Fetch full article text for multiple URLs concurrently.
+
+    Rate-limits per domain (1s delay between requests to the same domain)
+    but fetches from different domains in parallel.
+
+    Args:
+        urls: List of URLs to scrape
+        max_workers: Max concurrent threads
+        per_domain_delay: Seconds between requests to the same domain
+
+    Returns:
+        Dict mapping URL -> extracted text (empty string if failed)
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from collections import defaultdict
+    import threading
+
+    if not urls:
+        return {}
+
+    # Per-domain lock and last-request timestamp
+    domain_locks = defaultdict(threading.Lock)
+    domain_last_request = defaultdict(float)
+
+    def _fetch_with_domain_limit(url):
+        domain = _extract_domain(url)
+        with domain_locks[domain]:
+            # Wait if we hit this domain recently
+            elapsed = time.time() - domain_last_request[domain]
+            if elapsed < per_domain_delay:
+                time.sleep(per_domain_delay - elapsed)
+            domain_last_request[domain] = time.time()
+
+        return url, fetch_full_text(url)
+
+    results = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {executor.submit(_fetch_with_domain_limit, url): url for url in urls}
+        for future in as_completed(futures):
+            try:
+                url, text = future.result()
+                results[url] = text
+            except Exception as e:
+                url = futures[future]
+                logger.warning("Parallel fetch failed for %s: %s", url, e)
+                results[url] = ""
+
+    return results
 
 
 # --- ACLED OAuth Token Cache ---
@@ -135,10 +232,20 @@ def _get_iso3_mapping():
 
 def ingest_acled(country_iso3: str, days: int = 30) -> int:
     """
-    Fetch recent ACLED conflict events for a country via OAuth API.
+    DEPRECATED: ACLED has prohibited predictive/early warning use cases.
+    See: "The development of predictive or early warning systems using
+    ACLED data is not permitted under our Terms & Conditions."
 
-    Returns number of events ingested.
+    This function is retained for backward compatibility but skips execution.
+    Use GDELT (ingest_gdelt_events) + LLM classification (pipeline/classify.py)
+    as the primary event data sources.
+
+    Returns 0 (no events ingested).
     """
+    logger.info("ACLED ingestion skipped (deprecated: ToS prohibits predictive use).")
+    return 0
+
+    # --- Original implementation preserved below for reference ---
     if not ACLED_EMAIL or not ACLED_PASSWORD:
         logger.warning("ACLED credentials not set. Skipping ACLED ingestion.")
         return 0
@@ -243,7 +350,7 @@ def ingest_acled(country_iso3: str, days: int = 30) -> int:
 def ingest_rss(country_config: dict) -> int:
     """
     Fetch articles from RSS feeds using feedparser.
-    Extracts full article text via trafilatura.
+    Extracts full article text via parallel trafilatura scraping.
 
     Returns number of articles ingested.
     """
@@ -254,8 +361,8 @@ def ingest_rss(country_config: dict) -> int:
     iso3 = country_config["iso3"]
     conn = get_connection()
     try:
-        total = 0
-
+        # Phase 1: Parse feeds and collect new article metadata
+        pending = []  # list of (title, link, published, description, feed_url)
         for feed_url in feeds:
             try:
                 old_timeout = socket.getdefaulttimeout()
@@ -272,33 +379,35 @@ def ingest_rss(country_config: dict) -> int:
             for entry in feed.entries[:20]:
                 title = entry.get("title", "")
                 link = entry.get("link", "")
-                published = entry.get("published", "")
-                description = entry.get("summary", "")
-
                 if not title:
                     continue
-
                 existing = conn.execute(
                     "SELECT id FROM articles WHERE url = ?", (link,)
                 ).fetchone()
                 if existing:
                     continue
+                pending.append((title, link, entry.get("published", ""),
+                                entry.get("summary", ""), feed_url))
 
-                full_text = ""
-                if link:
-                    full_text = fetch_full_text(link)
-                    time.sleep(2)
-                if not full_text:
-                    full_text = description
+        if not pending:
+            return 0
 
-                try:
-                    insert_article(
-                        conn, iso3, title[:500], feed_url,
-                        link[:1000], published[:100], full_text[:50000],
-                    )
-                    total += 1
-                except sqlite3.IntegrityError as e:
-                    logger.debug("Skipping article: %s", e)
+        # Phase 2: Fetch full text in parallel (per-domain rate limited)
+        urls_to_fetch = [p[1] for p in pending if p[1]]
+        fetched_texts = fetch_full_texts_parallel(urls_to_fetch) if urls_to_fetch else {}
+
+        # Phase 3: Insert articles
+        total = 0
+        for title, link, published, description, feed_url in pending:
+            full_text = fetched_texts.get(link, "") or description
+            try:
+                insert_article(
+                    conn, iso3, title[:500], feed_url,
+                    link[:1000], published[:100], full_text[:50000],
+                )
+                total += 1
+            except sqlite3.IntegrityError:
+                pass
 
         conn.commit()
         logger.info("Ingested %d RSS articles for %s.", total, iso3)
@@ -340,10 +449,9 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
     conn = get_connection()
     try:
-        count = 0
-        scraped = 0
-
-        for i, art in enumerate(articles):
+        # Phase 1: Collect new article metadata
+        pending = []  # (art_url, title, seen_date, domain)
+        for art in articles:
             art_url = art.get("url", "")
             title = art.get("title", "")
             seen_date = art.get("seendate", "")[:10]
@@ -351,27 +459,31 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 
             if not art_url or not title:
                 continue
-
             existing = conn.execute("SELECT id FROM articles WHERE url = ?", (art_url,)).fetchone()
             if existing:
                 continue
+            pending.append((art_url, title, seen_date, domain))
 
-            full_text = ""
-            if scraped < 20:
-                full_text = fetch_full_text(art_url)
-                scraped += 1
-                time.sleep(2)
-            if not full_text:
-                full_text = title
+        if not pending:
+            return 0
 
+        # Phase 2: Parallel full-text scraping (cap at 30 articles)
+        urls_to_scrape = [p[0] for p in pending[:30]]
+        fetched_texts = fetch_full_texts_parallel(urls_to_scrape)
+
+        # Phase 3: Insert articles
+        count = 0
+        for art_url, title, seen_date, domain in pending:
+            full_text = fetched_texts.get(art_url, "") or title
             try:
                 insert_article(conn, iso3, title[:500], f"GDELT/{domain}",
                                art_url[:1000], seen_date, full_text[:50000])
                 count += 1
-            except sqlite3.IntegrityError as e:
-                logger.debug("Skipping GDELT article: %s", e)
+            except sqlite3.IntegrityError:
+                pass
 
         conn.commit()
+        scraped = sum(1 for u in urls_to_scrape if fetched_texts.get(u))
         logger.info("Ingested %d GDELT articles for %s (%d with full text).", count, iso3, scraped)
         return count
     finally:
@@ -381,10 +493,10 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
 def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     """
     Fetch conflict event data from GDELT DOC API using artlist mode.
-    Aggregates articles by date to produce daily conflict event counts.
-    Stores in gdelt_conflict_events table as a supplement to ACLED.
+    Classifies articles by event category and stores in both legacy
+    gdelt_conflict_events table AND the unified conflict_events table.
 
-    Returns number of daily records ingested.
+    Returns number of event records ingested into conflict_events.
     """
     iso3 = country_config["iso3"]
     country_name = country_config["name"]
@@ -410,9 +522,11 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
         logger.info("No GDELT event articles for %s.", iso3)
         return 0
 
-    # Aggregate by date: count articles and average tone per day
+    # Classify each article and aggregate by (date, category)
     from collections import defaultdict
-    daily = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
+    daily_legacy = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
+    daily_by_category = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
+
     for art in articles:
         seen = art.get("seendate", "")[:10]  # YYYYMMDD format
         if len(seen) == 8:
@@ -421,21 +535,32 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
             seen = f"{seen[:4]}-{seen[4:6]}-{seen[6:8]}"
         if not seen or len(seen) < 10:
             continue
-        daily[seen]["count"] += 1
+
+        title = art.get("title", "")
+        category = _classify_gdelt_article(title)
         tone = art.get("tone", 0)
+
+        # Legacy aggregation (all categories lumped)
+        daily_legacy[seen]["count"] += 1
         if tone:
-            daily[seen]["tones"].append(float(tone))
+            daily_legacy[seen]["tones"].append(float(tone))
         if art.get("url"):
-            daily[seen]["urls"].append(art["url"])
+            daily_legacy[seen]["urls"].append(art["url"])
+
+        # Category-specific aggregation
+        key = (seen, category)
+        daily_by_category[key]["count"] += 1
+        if tone:
+            daily_by_category[key]["tones"].append(float(tone))
+        if art.get("url"):
+            daily_by_category[key]["urls"].append(art["url"])
 
     conn = get_connection()
     try:
-        count = 0
-
-        for event_date, info in sorted(daily.items()):
+        # Write to legacy gdelt_conflict_events (backward compat)
+        for event_date, info in sorted(daily_legacy.items()):
             avg_tone = sum(info["tones"]) / len(info["tones"]) if info["tones"] else 0.0
             sample_url = info["urls"][0] if info["urls"] else ""
-
             try:
                 conn.execute(
                     """INSERT INTO gdelt_conflict_events
@@ -450,13 +575,29 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
                     (iso3, event_date, "conflict_coverage", info["count"],
                      avg_tone, None, None, sample_url[:1000]),
                 )
+            except sqlite3.IntegrityError:
+                pass
+
+        # Write to unified conflict_events (categorized)
+        count = 0
+        for (event_date, category), info in sorted(daily_by_category.items()):
+            avg_tone = sum(info["tones"]) / len(info["tones"]) if info["tones"] else 0.0
+            sample_url = info["urls"][0] if info["urls"] else ""
+            try:
+                insert_conflict_event(
+                    conn, iso3, event_date, category, "gdelt",
+                    event_type="gdelt_keyword_match",
+                    num_articles=info["count"],
+                    avg_tone=avg_tone,
+                    source_url=sample_url[:1000],
+                )
                 count += 1
-            except sqlite3.IntegrityError as e:
-                logger.debug("Skipping GDELT daily aggregate: %s", e)
+            except sqlite3.IntegrityError:
+                pass
 
         conn.commit()
-        logger.info("Ingested %d GDELT daily event records for %s (%d articles total).",
-                    count, iso3, len(articles))
+        logger.info("Ingested %d GDELT event records for %s (%d articles, %d categories).",
+                    count, iso3, len(articles), len(daily_by_category))
         return count
     finally:
         conn.close()
@@ -506,33 +647,40 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
 
     conn = get_connection()
     try:
-        count = 0
-
+        # Phase 1: Collect new article metadata
+        pending = []
         for art in articles:
             title = art.get("title", "")
             url = art.get("url", "")
-            published = art.get("publishedAt", "")
-            content = art.get("content", "") or art.get("description", "") or ""
-            source_name = art.get("source", {}).get("name", "NewsAPI")
-
             if not title or not url:
                 continue
-
             existing = conn.execute("SELECT id FROM articles WHERE url = ?", (url,)).fetchone()
             if existing:
                 continue
+            pending.append({
+                "title": title, "url": url,
+                "published": art.get("publishedAt", ""),
+                "content": art.get("content", "") or art.get("description", "") or "",
+                "source_name": art.get("source", {}).get("name", "NewsAPI"),
+            })
 
-            full_text = fetch_full_text(url) if url else ""
-            time.sleep(2)
-            if not full_text:
-                full_text = content
+        if not pending:
+            return 0
 
+        # Phase 2: Parallel full-text scraping
+        urls_to_scrape = [p["url"] for p in pending]
+        fetched_texts = fetch_full_texts_parallel(urls_to_scrape)
+
+        # Phase 3: Insert articles
+        count = 0
+        for p in pending:
+            full_text = fetched_texts.get(p["url"], "") or p["content"]
             try:
-                insert_article(conn, iso3, title[:500], source_name,
-                               url[:1000], published[:100], full_text[:50000])
+                insert_article(conn, iso3, p["title"][:500], p["source_name"],
+                               p["url"][:1000], p["published"][:100], full_text[:50000])
                 count += 1
-            except sqlite3.IntegrityError as e:
-                logger.debug("Skipping NewsAPI article: %s", e)
+            except sqlite3.IntegrityError:
+                pass
 
         conn.commit()
         logger.info("Ingested %d NewsAPI articles for %s.", count, iso3)

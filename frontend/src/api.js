@@ -40,3 +40,11 @@ export function getTrackComparison() {
 export function getAlerts(days = 30) {
   return fetchJSON(`${BASE}/alerts?days=${days}`);
 }
+
+export function getBriefs() {
+  return fetchJSON(`${BASE}/briefs/latest`);
+}
+
+export function getVertical(name) {
+  return fetchJSON(`${BASE}/verticals/${name}`);
+}

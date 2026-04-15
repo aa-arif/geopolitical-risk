@@ -1,6 +1,8 @@
 """
 Neighborhood contagion risk based on PITF finding that armed conflict
 in neighboring countries is a significant predictor of instability.
+
+Queries the unified conflict_events table (source-agnostic).
 """
 
 import numpy as np
@@ -11,24 +13,22 @@ def compute_neighborhood_risk(country_iso3: str, neighbors: list,
     """
     Compute risk from neighboring country conflict activity.
 
-    Queries ACLED database for conflict events in bordering countries
-    over the lookback period.
+    Queries the unified conflict_events table for ACE (armed conflict)
+    events in bordering countries over the lookback period.
 
     Returns: contagion risk score (0.0 to 1.0)
     """
     if not neighbors:
         return 0.0
 
-    # Build parameterized query (no f-string interpolation for user values)
     placeholders = ",".join(["?" for _ in neighbors])
     date_offset = f"-{int(lookback_days)} days"
     query = f"""
         SELECT country_iso3, COUNT(*) as event_count
-        FROM acled_events
+        FROM conflict_events
         WHERE country_iso3 IN ({placeholders})
         AND event_date >= date('now', ?)
-        AND event_type IN ('Battles', 'Violence against civilians',
-                           'Explosions/Remote violence')
+        AND event_category = 'ACE'
         GROUP BY country_iso3
     """
     params = list(neighbors) + [date_offset]

@@ -16,6 +16,37 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from config.settings import load_prompt
 from utils.api_client import generate_with_tool
 from utils.logger import logger
+from utils.validation import validate_probability, validate_event_type_scores
+
+
+# --- Shared event-type score schema fragment ---
+# Injected into each agent schema for V2 event-type decomposition.
+
+_EVENT_TYPE_SCORES_PROPERTY = {
+    "event_type_scores": {
+        "type": "object",
+        "description": "Per-event-type probability decomposition (0.0-1.0 each)",
+        "properties": {
+            "ACE": {"type": "number", "description": "Armed Conflict Escalation probability"},
+            "MCU": {"type": "number", "description": "Mass Civil Unrest probability"},
+            "REC": {"type": "number", "description": "Regime/Executive Change probability"},
+            "PSS": {"type": "number", "description": "Policy/Sanctions Shift probability"},
+            "CID": {"type": "number", "description": "Critical Infrastructure Disruption probability"},
+        },
+        "required": ["ACE", "MCU", "REC", "PSS", "CID"],
+    },
+    "event_type_drivers": {
+        "type": "object",
+        "description": "Key driver for each event type (1 sentence each, only for types with P > 0.10)",
+        "properties": {
+            "ACE": {"type": "string"},
+            "MCU": {"type": "string"},
+            "REC": {"type": "string"},
+            "PSS": {"type": "string"},
+            "CID": {"type": "string"},
+        },
+    },
+}
 
 
 # --- Tool schemas for structured output ---
@@ -65,7 +96,8 @@ _BASERATE_SCHEMA = {
         },
     },
     "required": ["base_rate_acknowledged", "upward_adjustments", "downward_adjustments",
-                  "final_probability", "confidence_in_estimate", "key_uncertainties"],
+                  "final_probability", "confidence_in_estimate", "key_uncertainties",
+                  "event_type_scores"],
 }
 
 _ANALOGY_SCHEMA = {
@@ -98,7 +130,8 @@ _ANALOGY_SCHEMA = {
             "items": {"type": "string"},
         },
     },
-    "required": ["analogies", "synthesis", "final_probability", "key_uncertainties"],
+    "required": ["analogies", "synthesis", "final_probability", "key_uncertainties",
+                  "event_type_scores"],
 }
 
 _DECOMP_SCHEMA = {
@@ -126,7 +159,8 @@ _DECOMP_SCHEMA = {
             "items": {"type": "string"},
         },
     },
-    "required": ["sub_questions", "combination_logic", "final_probability", "key_uncertainties"],
+    "required": ["sub_questions", "combination_logic", "final_probability", "key_uncertainties",
+                  "event_type_scores"],
 }
 
 _DEVIL_SCHEMA = {
@@ -164,14 +198,37 @@ _DEVIL_SCHEMA = {
     },
     "required": ["consensus_challenged", "contrarian_arguments",
                   "what_consensus_overweights", "what_consensus_underweights",
-                  "final_probability", "key_uncertainties"],
+                  "final_probability", "key_uncertainties",
+                  "event_type_scores"],
 }
 
 
+# Inject event_type_scores into all agent schemas
+for _schema in [_BASERATE_SCHEMA, _ANALOGY_SCHEMA, _DECOMP_SCHEMA, _DEVIL_SCHEMA]:
+    _schema["properties"].update(_EVENT_TYPE_SCORES_PROPERTY)
+
+
+# --- Event-type decomposition prompt addendum ---
+# Appended to each agent prompt for V2 event-type scoring.
+_EVENT_TYPE_ADDENDUM = """
+
+EVENT-TYPE DECOMPOSITION:
+In addition to your overall assessment, decompose the risk into these five event types. For each, estimate the probability (0.00 to 1.00) that it will occur in {country_name} within 30 days:
+- ACE (Armed Conflict Escalation): military clashes, bombings, targeted violence increasing beyond baseline
+- MCU (Mass Civil Unrest): large-scale protests, riots, strikes disrupting normal operations
+- REC (Regime/Executive Change): coup, forced resignation, emergency succession, contested transfer of power
+- PSS (Policy/Sanctions Shift): new sanctions, trade restrictions, regulatory changes affecting foreign operations
+- CID (Critical Infrastructure Disruption): attacks on or failures of energy, transport, communications, or financial systems
+
+Your overall final_probability should be consistent with your event_type_scores (typically close to the maximum of the individual scores).
+For each type with P > 0.10, provide a one-sentence key driver in event_type_drivers.
+"""
+
+
 def _format_acled_summary(acled_data: dict) -> str:
-    """Format ACLED summary data into readable text for prompts."""
+    """Format conflict event summary data into readable text for prompts."""
     if not acled_data or acled_data.get("total_events", 0) == 0:
-        return "No ACLED events recorded in the lookback period."
+        return "No conflict events recorded in the lookback period."
 
     lines = [
         f"Total events (last {acled_data['period_days']} days): {acled_data['total_events']}",
@@ -206,12 +263,15 @@ def forecast_baserate(country_config: dict, track_a_result: dict,
         acled_summary=_format_acled_summary(acled_data),
     )
 
+    prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
+
     result = generate_with_tool(
         prompt=prompt, tool_name="submit_forecast",
         tool_schema=_BASERATE_SCHEMA, model="sonnet", temperature=0.3,
     )
     result["agent_type"] = "baserate"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
+    validate_event_type_scores(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 1 (baserate) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -228,6 +288,7 @@ def forecast_analogy(country_config: dict, track_a_result: dict,
         track_a_probability=f"{prob * 100:.1f}",
         reasoning_chains_summary=reasoning_summary,
     )
+    prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
 
     result = generate_with_tool(
         prompt=prompt, tool_name="submit_forecast",
@@ -235,6 +296,7 @@ def forecast_analogy(country_config: dict, track_a_result: dict,
     )
     result["agent_type"] = "analogy"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
+    validate_event_type_scores(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 2 (analogy) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -251,6 +313,7 @@ def forecast_decomposition(country_config: dict, track_a_result: dict,
         track_a_probability=f"{prob * 100:.1f}",
         reasoning_chains_summary=reasoning_summary,
     )
+    prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
 
     result = generate_with_tool(
         prompt=prompt, tool_name="submit_forecast",
@@ -258,6 +321,7 @@ def forecast_decomposition(country_config: dict, track_a_result: dict,
     )
     result["agent_type"] = "decomposition"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
+    validate_event_type_scores(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 3 (decomp) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -303,6 +367,7 @@ def forecast_devil(country_config: dict, track_a_result: dict,
         reasoning_chains_summary=reasoning_summary,
         acled_summary=_format_acled_summary(acled_data),
     )
+    prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
 
     result = generate_with_tool(
         prompt=prompt, tool_name="submit_forecast",
@@ -310,6 +375,7 @@ def forecast_devil(country_config: dict, track_a_result: dict,
     )
     result["agent_type"] = "devil"
     _validate_forecast(result, track_a_prob=track_a_result["probability"])
+    validate_event_type_scores(result, track_a_prob=track_a_result["probability"])
     logger.info("Agent 4 (devil) for %s: P=%.3f",
                 country_config["iso3"], result["final_probability"])
     return result
@@ -317,28 +383,7 @@ def forecast_devil(country_config: dict, track_a_result: dict,
 
 def _validate_forecast(result: dict, track_a_prob: float = None) -> None:
     """Ensure forecast result has valid final_probability."""
-    if "final_probability" not in result:
-        result["final_probability"] = 0.15  # default fallback
-
-    p = result["final_probability"]
-
-    # With tool_use, the model returns a float directly.
-    # But if fallback to free-text parsing occurred, the model may have
-    # returned percentage (e.g. 23.0) instead of decimal (0.23).
-    # Only convert if clearly a percentage (> 1.0).
-    if not result.get("_meta", {}).get("structured", False) and p > 1.0:
-        p = p / 100.0
-
-    p = max(0.01, min(0.99, p))
-
-    # Clamp to within 50pp of Track A if available.
-    if track_a_prob is not None:
-        max_deviation = 0.50
-        p = max(track_a_prob - max_deviation, min(track_a_prob + max_deviation, p))
-        p = max(0.01, min(0.99, p))
-
-    result["final_probability"] = p
-
+    validate_probability(result, track_a_prob=track_a_prob)
     if "key_uncertainties" not in result:
         result["key_uncertainties"] = []
 
