@@ -1,4 +1,6 @@
 # GeoRisk Daily Pipeline - 6:00 AM local time
+# Daily email brief is sent as the final step of the pipeline (not a separate cron job).
+# Configure SMTP_* environment variables and data/email_recipients.txt for delivery.
 0 6 * * * cd /opt/georisk && /opt/georisk/venv/bin/python -m pipeline.daily_run >> /opt/georisk/data/pipeline_logs/daily_$(date +\%Y-\%m-\%d).log 2>&1
 
 # GeoRisk Weekly Digest - Sunday 10:00 AM local time

@@ -675,6 +675,26 @@ def get_latest_predictions_all(conn, event_type: str = "composite") -> list:
     return [dict(row) for row in cursor.fetchall()]
 
 
+def get_previous_predictions_all(conn, event_type: str = "composite") -> list:
+    """
+    Get the second-most-recent prediction for every country, in one query.
+    Used to compute deltas for the dashboard trend arrows.
+    """
+    cursor = conn.execute(
+        """WITH ranked AS (
+               SELECT *, ROW_NUMBER() OVER (
+                   PARTITION BY country_iso3
+                   ORDER BY prediction_date DESC, id DESC
+               ) as rn
+               FROM predictions
+               WHERE event_type = ?
+           )
+           SELECT * FROM ranked WHERE rn = 2""",
+        (event_type,),
+    )
+    return [dict(row) for row in cursor.fetchall()]
+
+
 def get_event_type_predictions(conn, country_iso3: str,
                                  prediction_date: str = None) -> list:
     """

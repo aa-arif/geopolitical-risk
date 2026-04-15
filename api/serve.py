@@ -35,7 +35,8 @@ from utils import risk_level as _risk_level
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
     get_event_summary, get_recent_reasoning_chains, get_resolved_predictions,
-    get_agent_outputs, get_latest_predictions_all, get_event_type_predictions,
+    get_agent_outputs, get_latest_predictions_all, get_previous_predictions_all,
+    get_event_type_predictions,
     get_latest_brief, get_latest_briefs_all, get_recent_alerts_v2,
 )
 from evaluation.track_comparison import compare_tracks
@@ -111,6 +112,10 @@ def list_countries():
         latest_composites = get_latest_predictions_all(conn, event_type="composite")
         composite_by_iso3 = {r["country_iso3"]: r for r in latest_composites}
 
+        # Previous composite predictions for delta computation
+        previous_composites = get_previous_predictions_all(conn, event_type="composite")
+        previous_by_iso3 = {r["country_iso3"]: r for r in previous_composites}
+
         # Single query for all latest event-type predictions
         et_predictions = {}
         for et in ["ACE", "MCU", "REC", "PSS", "CID"]:
@@ -127,10 +132,14 @@ def list_countries():
                 except (json.JSONDecodeError, TypeError):
                     reasoning = {}
 
+                prev = previous_by_iso3.get(iso3)
+                delta = (prob - prev["calibrated_probability"]) if prev else None
+
                 results.append({
                     "iso3": iso3,
                     "name": config["name"],
                     "current_probability": prob,
+                    "delta": delta,
                     "track_a": latest["track_a_probability"],
                     "track_b": latest["track_b_probability"],
                     "confidence": reasoning.get("confidence"),
@@ -152,6 +161,7 @@ def list_countries():
                     "iso3": iso3,
                     "name": config["name"],
                     "current_probability": track_a_prob,
+                    "delta": None,
                     "track_a": track_a_prob,
                     "track_b": None,
                     "confidence": None,

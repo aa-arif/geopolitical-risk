@@ -68,22 +68,27 @@ export default function Public() {
         padding: '2rem 2rem 0', maxWidth: '960px', margin: '0 auto',
       }}>
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: .5 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '.75rem', marginBottom: '.3rem' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: '.75rem', marginBottom: '.5rem' }}>
             <h1 style={{
               fontFamily: "'JetBrains Mono', monospace", fontSize: '1.3rem', fontWeight: 800,
               letterSpacing: '.12em',
             }}>
               PRECURSION
             </h1>
-            <span style={{ fontSize: '.6rem', color: 'var(--text-2)', letterSpacing: '.05em' }}>
-              Instability Monitor
-            </span>
           </div>
+          <h2 style={{
+            fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4, color: 'var(--text-0)',
+            marginBottom: '.6rem', letterSpacing: '-0.01em',
+          }}>
+            Daily Geopolitical Risk Forecasts, Measured Against Reality
+          </h2>
           <p style={{
             fontSize: '.78rem', lineHeight: 1.6, color: 'var(--text-1)', maxWidth: '640px',
             marginBottom: '1.5rem',
           }}>
-            Dual-track geopolitical risk forecasting. Combines structural indicators (regime type, development, conflict history) with AI-driven news analysis to predict significant violence escalation within 30-day windows.
+            Calibrated 30-day violence probability forecasts for {countries.length} countries.
+            We publish our predictions openly and score our accuracy with Brier scores.
+            Nobody else does this.
           </p>
         </motion.div>
 
@@ -120,22 +125,28 @@ export default function Public() {
             </div>
           )}
 
-          {nResolved > 0 && brierScore != null && (
-            <div style={{
-              padding: '.6rem 1rem', background: 'var(--bg-2)', border: '1px solid var(--border-0)',
-              borderRadius: 'var(--r-sm)', minWidth: '120px',
-            }}>
-              <div style={{ fontSize: '.58rem', color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600, marginBottom: '.2rem' }}>
-                Brier Score
-              </div>
-              <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--cyan)' }}>
-                {brierScore.toFixed(3)}
-              </div>
-              <div className="mono" style={{ fontSize: '.55rem', color: 'var(--text-2)' }}>
-                {nResolved} resolved
-              </div>
+          <div style={{
+            padding: '.6rem 1rem', background: 'var(--bg-2)', border: '1px solid var(--border-0)',
+            borderRadius: 'var(--r-sm)', minWidth: '120px',
+          }}>
+            <div style={{ fontSize: '.58rem', color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: '.08em', fontWeight: 600, marginBottom: '.2rem' }}>
+              Brier Score
             </div>
-          )}
+            {nResolved > 0 && brierScore != null ? (
+              <>
+                <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--cyan)' }}>
+                  {brierScore.toFixed(3)}
+                </div>
+                <div className="mono" style={{ fontSize: '.55rem', color: 'var(--text-2)' }}>
+                  {nResolved} resolved
+                </div>
+              </>
+            ) : (
+              <div style={{ fontSize: '.72rem', color: 'var(--text-2)', lineHeight: 1.4 }}>
+                Pending &mdash; first predictions resolve May 2026
+              </div>
+            )}
+          </div>
 
           {latestDate && (
             <div style={{
@@ -223,18 +234,66 @@ export default function Public() {
           </div>
         </motion.div>
 
+        {/* How We're Different */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: .5, duration: .5 }}
+          style={{ marginTop: '2.5rem', marginBottom: '2rem' }}
+        >
+          <h3 style={{
+            fontSize: '.65rem', fontWeight: 700, color: 'var(--text-2)',
+            textTransform: 'uppercase', letterSpacing: '.1em', marginBottom: '1rem', textAlign: 'center',
+          }}>
+            How We're Different
+          </h3>
+          <div style={{
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+            gap: '.8rem',
+          }}>
+            <div style={{
+              padding: '1.1rem', background: 'var(--bg-2)', border: '1px solid var(--border-0)',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-0)', marginBottom: '.4rem' }}>
+                Probabilistic, not qualitative
+              </div>
+              <p style={{ fontSize: '.72rem', lineHeight: 1.6, color: 'var(--text-1)', margin: 0 }}>
+                We assign actual numbers, not vague risk levels. 37% means 37%.
+              </p>
+            </div>
+            <div style={{
+              padding: '1.1rem', background: 'var(--bg-2)', border: '1px solid var(--border-0)',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-0)', marginBottom: '.4rem' }}>
+                Publicly scored
+              </div>
+              <p style={{ fontSize: '.72rem', lineHeight: 1.6, color: 'var(--text-1)', margin: 0 }}>
+                When our 30-day windows close, we publish Brier scores. If we're wrong, you'll see it.
+              </p>
+            </div>
+            <div style={{
+              padding: '1.1rem', background: 'var(--bg-2)', border: '1px solid var(--border-0)',
+              borderRadius: 'var(--r-sm)',
+            }}>
+              <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-0)', marginBottom: '.4rem' }}>
+                Two independent models
+              </div>
+              <p style={{ fontSize: '.72rem', lineHeight: 1.6, color: 'var(--text-1)', margin: 0 }}>
+                A structural model built on political science research and an AI reasoning engine that reads today's news. They check each other.
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
         {/* Footer */}
         <motion.div
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: .6 }}
           style={{
-            marginTop: '2rem', padding: '1.2rem', textAlign: 'center',
+            padding: '1.2rem', textAlign: 'center',
             borderTop: '1px solid var(--border-0)',
           }}
         >
-          <p style={{ fontSize: '.75rem', color: 'var(--text-1)', marginBottom: '.6rem' }}>
-            Updated daily. Structural model + AI ensemble with 4 independent forecasting agents.
-          </p>
-          <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: '1.5rem', justifyContent: 'center', alignItems: 'center', marginBottom: '.8rem' }}>
             <a
               href="https://precursion.substack.com"
               target="_blank"
@@ -249,14 +308,14 @@ export default function Public() {
               onMouseEnter={e => { e.currentTarget.style.background = 'rgba(56,189,248,.15)'; e.currentTarget.style.borderColor = 'rgba(56,189,248,.4)'; }}
               onMouseLeave={e => { e.currentTarget.style.background = 'var(--cyan-dim)'; e.currentTarget.style.borderColor = 'rgba(56,189,248,.2)'; }}
             >
-              Subscribe to the Instability Monitor
+              Follow the Instability Monitor &rarr;
             </a>
             <Link to="/" style={{ fontSize: '.72rem', color: 'var(--text-2)' }}>
               Full Dashboard
             </Link>
           </div>
-          <p style={{ fontSize: '.6rem', color: 'var(--text-2)', marginTop: '1rem' }}>
-            Methodology: PITF structural model + ACLED conflict data + GDELT news corpus + Claude AI ensemble forecasting.
+          <p style={{ fontSize: '.6rem', color: 'var(--text-2)' }}>
+            Updated daily. Structural model + AI ensemble with 4 independent forecasting agents.
           </p>
         </motion.div>
       </main>

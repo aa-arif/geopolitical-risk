@@ -664,6 +664,15 @@ def run_all():
     except Exception as e:
         logger.warning("Vertical brief generation failed: %s", e, exc_info=True)
 
+    # --- Phase 7: Daily email brief ---
+    try:
+        from pipeline.email_brief import send_daily_brief
+        sent = send_daily_brief()
+        if sent:
+            logger.info("Daily email brief sent to %d recipients.", sent)
+    except Exception as e:
+        logger.warning("Daily email brief failed: %s", e, exc_info=True)
+
     return results
 
 

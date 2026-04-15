@@ -37,6 +37,24 @@ function ConfidenceIndicator({ value }) {
   );
 }
 
+function TrendArrow({ delta }) {
+  if (delta == null) return null;
+  const pp = Math.round(delta * 100);
+  if (Math.abs(pp) < 1) return null;
+  const rising = pp > 0;
+  const color = Math.abs(pp) > 2
+    ? (rising ? '#ef4444' : '#22c55e')
+    : '#64748b';
+  return (
+    <span className="mono" title={`${rising ? '+' : ''}${pp}pp from previous assessment`} style={{
+      fontSize: '.6rem', fontWeight: 700, color,
+      display: 'inline-flex', alignItems: 'center', gap: '.1rem',
+    }}>
+      {rising ? '\u2191' : '\u2193'}{Math.abs(pp)}pp
+    </span>
+  );
+}
+
 function RiskCard({ country, index }) {
   const riskColor = RISK_COLORS[country.risk_level] || '#555';
   return (
@@ -48,7 +66,10 @@ function RiskCard({ country, index }) {
       <Link to={`/country/${country.iso3}`} className="risk-card">
         <div className="risk-card-header">
           <h3 className="risk-card-name">{country.name}</h3>
-          <span className="risk-badge" style={{ background: riskColor }}>{country.risk_level || 'N/A'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.35rem' }}>
+            <TrendArrow delta={country.delta} />
+            <span className="risk-badge" style={{ background: riskColor }}>{country.risk_level || 'N/A'}</span>
+          </div>
         </div>
         <div className="risk-card-body">
           <div className="risk-card-row">
