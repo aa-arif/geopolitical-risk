@@ -66,8 +66,7 @@ def main():
         if pred_date == "never":
             status = "NO PREDICTIONS"
             error_count += 1
-        elif pred_date < (datetime.now().astimezone().strftime("%Y-%m-%d")[:8] + "01"):  # rough 2-day check
-            # More precise: check if older than 2 days
+        else:
             from datetime import timedelta
             two_days_ago = (datetime.now().astimezone() - timedelta(days=2)).strftime("%Y-%m-%d")
             if pred_date < two_days_ago:
@@ -75,8 +74,6 @@ def main():
                 warn_count += 1
             else:
                 healthy += 1
-        else:
-            healthy += 1
 
         if acled_count == 0:
             if status == "OK":
@@ -98,7 +95,6 @@ def main():
         print(f"GPR Data: FOUND ({size_mb:.1f} MB)")
     else:
         print("GPR Data: NOT FOUND (download from https://www.matteoiacoviello.com/gpr.htm)")
-
     # Calibration model
     cal_path = DATA_DIR / "calibration_model.pkl"
     if cal_path.exists():

@@ -438,7 +438,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     url = f"{GDELT_API_BASE}?{params}"
 
     # Delay to avoid 429 when running many countries sequentially
-    time.sleep(10)
+    time.sleep(30)
 
     data = _gdelt_fetch_with_backoff(url, iso3, "GDELT DOC")
 
@@ -513,7 +513,7 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     url = f"{GDELT_API_BASE}?{params}"
 
     # Delay to avoid 429 when running many countries sequentially
-    time.sleep(10)
+    time.sleep(30)
 
     data = _gdelt_fetch_with_backoff(url, iso3, "GDELT events")
 
