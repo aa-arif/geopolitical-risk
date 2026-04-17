@@ -263,6 +263,19 @@ def initialize_db():
         conn.execute("ALTER TABLE predictions ADD COLUMN event_type TEXT DEFAULT 'composite'")
         conn.commit()
 
+    # --- Migration: ingest confidence flag (P0.2) ---
+    try:
+        conn.execute("SELECT ingest_confidence FROM predictions LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE predictions ADD COLUMN ingest_confidence TEXT DEFAULT NULL")
+        conn.commit()
+
+    try:
+        conn.execute("SELECT ingest_deviation_sigma FROM predictions LIMIT 1")
+    except Exception:
+        conn.execute("ALTER TABLE predictions ADD COLUMN ingest_deviation_sigma REAL DEFAULT NULL")
+        conn.commit()
+
     # Deduplicate predictions before creating unique index (keep latest id per group)
     # Groups by (country, date, event_type) to support V2 per-type predictions
     conn.execute("""
@@ -562,6 +575,32 @@ def get_resolved_predictions(conn, country_iso3: str = None) -> list:
             """SELECT * FROM predictions
                WHERE resolved = TRUE
                ORDER BY prediction_date"""
+        )
+    return [dict(row) for row in cursor.fetchall()]
+
+
+def get_resolved_predictions_by_confidence(conn, confidence_tier: str) -> list:
+    """
+    Get resolved predictions filtered by ingest_confidence tier.
+
+    Args:
+        confidence_tier: One of 'high', 'low', 'unknown'. The 'unknown'
+                         bucket also matches NULL values (predictions resolved
+                         before the confidence flag was introduced).
+    """
+    if confidence_tier == "unknown":
+        cursor = conn.execute(
+            """SELECT * FROM predictions
+               WHERE resolved = TRUE
+               AND (ingest_confidence = 'unknown' OR ingest_confidence IS NULL)
+               ORDER BY prediction_date"""
+        )
+    else:
+        cursor = conn.execute(
+            """SELECT * FROM predictions
+               WHERE resolved = TRUE AND ingest_confidence = ?
+               ORDER BY prediction_date""",
+            (confidence_tier,),
         )
     return [dict(row) for row in cursor.fetchall()]
 

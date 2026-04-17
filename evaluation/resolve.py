@@ -14,7 +14,9 @@ ACE events with fatalities (the closest match to the original
 "significant political instability" criterion).
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
+
+import numpy as np
 
 from config.settings import EVENT_TYPE_RESOLUTION, CALIBRATED_EVENT_TYPES
 from utils.db import (
@@ -85,6 +87,81 @@ def _resolve_by_occurrence(conn, iso3, pred_date, window_end,
         "threshold": 0,
         "resolution_source": f"conflict_events_{event_category}",
     }
+
+
+def compute_ingest_deviation(conn, iso3, pred_date, window_end, event_category):
+    """
+    Measure how much the ingest volume during the prediction window
+    deviates from the 90-day baseline prior to the window.
+
+    Uses pulled_at (when our pipeline recorded the event) not event_date
+    (when the event actually happened), so we detect pipeline outages
+    rather than real-world quiet periods.
+
+    Returns (sigma, confidence_flag) where:
+      sigma = (window_mean - baseline_mean) / baseline_std
+      confidence_flag in {'high', 'low', 'unknown'}
+
+    Rules:
+    - If baseline has fewer than 60 days with any ingest, return (None, 'unknown')
+    - If |sigma| <= 2.0, return (sigma, 'high')
+    - Otherwise return (sigma, 'low')
+    """
+    pred_dt = datetime.strptime(pred_date, "%Y-%m-%d")
+    window_dt = datetime.strptime(window_end, "%Y-%m-%d")
+    baseline_start = (pred_dt - timedelta(days=90)).strftime("%Y-%m-%d")
+
+    # Baseline: pulled_at in [pred_date - 90, pred_date)
+    baseline_rows = conn.execute(
+        """SELECT date(pulled_at) as d, COUNT(*) as cnt
+           FROM conflict_events
+           WHERE country_iso3 = ? AND event_category = ?
+           AND date(pulled_at) >= ? AND date(pulled_at) < ?
+           GROUP BY date(pulled_at)""",
+        (iso3, event_category, baseline_start, pred_date),
+    ).fetchall()
+    baseline_by_day = {r["d"]: r["cnt"] for r in baseline_rows}
+
+    # "60 days with any ingest" check: distinct non-zero days in the 90-day span
+    if len(baseline_by_day) < 60:
+        return (None, "unknown")
+
+    # Fill in zero-ingest days across the full 90-day baseline span
+    baseline_counts = []
+    for offset in range(90):
+        d = (pred_dt - timedelta(days=90 - offset)).strftime("%Y-%m-%d")
+        baseline_counts.append(baseline_by_day.get(d, 0))
+
+    baseline_arr = np.array(baseline_counts, dtype=float)
+    baseline_mean = baseline_arr.mean()
+    baseline_std = baseline_arr.std()
+
+    if baseline_std == 0:
+        return (None, "unknown")
+
+    # Window: pulled_at in [pred_date, window_end]
+    window_rows = conn.execute(
+        """SELECT date(pulled_at) as d, COUNT(*) as cnt
+           FROM conflict_events
+           WHERE country_iso3 = ? AND event_category = ?
+           AND date(pulled_at) >= ? AND date(pulled_at) <= ?
+           GROUP BY date(pulled_at)""",
+        (iso3, event_category, pred_date, window_end),
+    ).fetchall()
+    window_by_day = {r["d"]: r["cnt"] for r in window_rows}
+
+    window_span = (window_dt - pred_dt).days + 1
+    window_counts = []
+    for offset in range(window_span):
+        d = (pred_dt + timedelta(days=offset)).strftime("%Y-%m-%d")
+        window_counts.append(window_by_day.get(d, 0))
+
+    window_mean = float(np.array(window_counts, dtype=float).mean())
+    sigma = float((window_mean - baseline_mean) / baseline_std)
+
+    if abs(sigma) <= 2.0:
+        return (sigma, "high")
+    return (sigma, "low")
 
 
 def _resolve_composite_legacy(conn, iso3, pred_date, window_end, stored_threshold):
