@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 from typing import Optional
 
 import feedparser
@@ -387,7 +388,9 @@ def ingest_rss(country_config: dict) -> int:
                 ).fetchone()
                 if existing:
                     continue
-                pending.append((title, link, entry.get("published", ""),
+                raw_published = entry.get("published", "")
+                published = _parse_publication_date(raw_published) or ""
+                pending.append((title, link, published,
                                 entry.get("summary", ""), feed_url))
 
         if not pending:
@@ -417,14 +420,17 @@ def ingest_rss(country_config: dict) -> int:
         conn.close()
 
 
-def _parse_gdelt_date(raw) -> Optional[str]:
-    """Parse a GDELT seendate value into YYYY-MM-DD. Returns None if unparseable.
+def _parse_publication_date(raw) -> Optional[str]:
+    """Parse a publication date from any ingest source into YYYY-MM-DD.
 
-    Accepts full ISO seendate (YYYYMMDDTHHMMSSZ), classic 8-char (YYYYMMDD),
-    already-ISO prefix (YYYY-MM-DD...), and already-truncated 10-char values
-    like YYYYMMDDTN that leaked into the DB before this parser existed.
-    Returns None for empty, non-string, or values whose first 8 digits aren't
-    a valid calendar date.
+    Accepts:
+      - GDELT full ISO seendate: "20260414T010203Z" -> "2026-04-14"
+      - GDELT classic 8-char:    "20260414"          -> "2026-04-14"
+      - ISO 8601 (NewsAPI):      "2026-04-14T01:02:03Z" -> "2026-04-14"
+      - Already-ISO prefix:      "2026-04-14..."     -> "2026-04-14"
+      - GDELT truncated 10-char: "20260414T0"        -> "2026-04-14"
+      - RFC 2822 (RSS):          "Mon, 16 May 2026 10:23:45 GMT" -> "2026-05-16"
+    Returns None for empty, non-string, or otherwise unparseable values.
     """
     if not isinstance(raw, str):
         return None
@@ -436,7 +442,13 @@ def _parse_gdelt_date(raw) -> Optional[str]:
     elif len(s) >= 8 and s[:8].isdigit():
         iso = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
     else:
-        return None
+        try:
+            dt = parsedate_to_datetime(s)
+        except (TypeError, ValueError):
+            return None
+        if dt is None:
+            return None
+        return dt.strftime("%Y-%m-%d")
     try:
         datetime.strptime(iso, "%Y-%m-%d")
     except ValueError:
@@ -482,7 +494,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
         for art in articles:
             art_url = art.get("url", "")
             title = art.get("title", "")
-            seen_date = _parse_gdelt_date(art.get("seendate", "")) or ""
+            seen_date = _parse_publication_date(art.get("seendate", "")) or ""
             domain = art.get("domain", "GDELT")
 
             if not art_url or not title:
@@ -556,7 +568,7 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     daily_by_category = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
 
     for art in articles:
-        seen = _parse_gdelt_date(art.get("seendate", ""))
+        seen = _parse_publication_date(art.get("seendate", ""))
         if not seen:
             continue
 
