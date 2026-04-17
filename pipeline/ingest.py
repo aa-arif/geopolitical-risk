@@ -11,6 +11,7 @@ import urllib.error
 import urllib.request
 import urllib.parse
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 import feedparser
 import requests
@@ -416,6 +417,33 @@ def ingest_rss(country_config: dict) -> int:
         conn.close()
 
 
+def _parse_gdelt_date(raw) -> Optional[str]:
+    """Parse a GDELT seendate value into YYYY-MM-DD. Returns None if unparseable.
+
+    Accepts full ISO seendate (YYYYMMDDTHHMMSSZ), classic 8-char (YYYYMMDD),
+    already-ISO prefix (YYYY-MM-DD...), and already-truncated 10-char values
+    like YYYYMMDDTN that leaked into the DB before this parser existed.
+    Returns None for empty, non-string, or values whose first 8 digits aren't
+    a valid calendar date.
+    """
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        iso = s[:10]
+    elif len(s) >= 8 and s[:8].isdigit():
+        iso = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+    else:
+        return None
+    try:
+        datetime.strptime(iso, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return iso
+
+
 def ingest_gdelt(country_config: dict, days: int = 7) -> int:
     """
     Fetch conflict-related articles from GDELT DOC 2.0 API.
@@ -454,7 +482,7 @@ def ingest_gdelt(country_config: dict, days: int = 7) -> int:
         for art in articles:
             art_url = art.get("url", "")
             title = art.get("title", "")
-            seen_date = art.get("seendate", "")[:10]
+            seen_date = _parse_gdelt_date(art.get("seendate", "")) or ""
             domain = art.get("domain", "GDELT")
 
             if not art_url or not title:
@@ -528,12 +556,8 @@ def ingest_gdelt_events(country_config: dict, days: int = 7) -> int:
     daily_by_category = defaultdict(lambda: {"count": 0, "tones": [], "urls": []})
 
     for art in articles:
-        seen = art.get("seendate", "")[:10]  # YYYYMMDD format
-        if len(seen) == 8:
-            seen = f"{seen[:4]}-{seen[4:6]}-{seen[6:8]}"
-        elif len(seen) == 10 and "-" not in seen:
-            seen = f"{seen[:4]}-{seen[4:6]}-{seen[6:8]}"
-        if not seen or len(seen) < 10:
+        seen = _parse_gdelt_date(art.get("seendate", ""))
+        if not seen:
             continue
 
         title = art.get("title", "")
