@@ -307,20 +307,30 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
         actual_outcome = resolution["actual_outcome"]
         bs = brier_score(calibrated_p, actual_outcome)
 
-        conn.execute(
-            """UPDATE predictions
-               SET resolved = TRUE, actual_outcome = ?, brier_score = ?
-               WHERE id = ?""",
-            (actual_outcome, bs, pred["id"]),
+        # Ingest-volume confidence flag (P0.2): composite predictions
+        # use ACE as the ingest proxy to match _resolve_composite_legacy.
+        ingest_category = "ACE" if event_type == "composite" else event_type
+        sigma, confidence = compute_ingest_deviation(
+            conn, iso3, pred_date, window_end, ingest_category,
         )
 
+        conn.execute(
+            """UPDATE predictions
+               SET resolved = TRUE, actual_outcome = ?, brier_score = ?,
+                   ingest_confidence = ?, ingest_deviation_sigma = ?
+               WHERE id = ?""",
+            (actual_outcome, bs, confidence, sigma, pred["id"]),
+        )
+
+        sigma_str = f"{sigma:.2f}" if sigma is not None else "n/a"
         logger.info(
             "Resolved prediction %d for %s/%s (%s to %s) via %s: "
-            "events=%d threshold=%s outcome=%d brier=%.4f",
+            "events=%d threshold=%s outcome=%d brier=%.4f "
+            "ingest_confidence=%s sigma=%s",
             pred["id"], iso3, event_type, pred_date, window_end,
             resolution["resolution_source"],
             resolution["event_count"], resolution["threshold"],
-            actual_outcome, bs,
+            actual_outcome, bs, confidence, sigma_str,
         )
 
         resolved.append({
@@ -334,6 +344,8 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
             "actual_outcome": actual_outcome,
             "brier_score": bs,
             "resolution_source": resolution["resolution_source"],
+            "ingest_confidence": confidence,
+            "ingest_deviation_sigma": sigma,
         })
 
     conn.commit()

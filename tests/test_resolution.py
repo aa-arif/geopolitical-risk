@@ -69,6 +69,8 @@ def db():
             resolved BOOLEAN DEFAULT FALSE,
             actual_outcome INTEGER DEFAULT NULL,
             brier_score REAL DEFAULT NULL,
+            ingest_confidence TEXT DEFAULT NULL,
+            ingest_deviation_sigma REAL DEFAULT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         );
     """)
