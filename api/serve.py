@@ -35,6 +35,7 @@ from utils import risk_level as _risk_level
 from utils.db import (
     get_connection, initialize_db, get_prediction_history,
     get_event_summary, get_recent_reasoning_chains, get_resolved_predictions,
+    get_resolved_predictions_by_confidence,
     get_agent_outputs, get_latest_predictions_all, get_previous_predictions_all,
     get_event_type_predictions,
     get_latest_brief, get_latest_briefs_all, get_recent_alerts_v2,
@@ -556,6 +557,19 @@ def get_vertical(vertical_name: str):
         conn.close()
 
 
+def _summarize_confidence_bucket(rows: list) -> dict:
+    """Brier + count for a confidence-filtered list of resolved predictions."""
+    filtered = [r for r in rows if r["actual_outcome"] is not None]
+    if not filtered:
+        return {"n": 0, "brier_score": None}
+    preds = [r["calibrated_probability"] for r in filtered]
+    actuals = [r["actual_outcome"] for r in filtered]
+    return {
+        "n": len(filtered),
+        "brier_score": brier_score_aggregate(preds, actuals),
+    }
+
+
 @api.get("/evaluation")
 def get_evaluation():
     conn = get_connection()
@@ -590,12 +604,30 @@ def get_evaluation():
                     "base_rate": sum(et_actuals) / len(et_actuals),
                 }
 
-        return {
-            "n_resolved": len(preds),
-            "brier_aggregate": brier,
+        aggregate = {
+            "n": len(preds),
+            "brier_score": brier,
             "base_rate": sum(actuals) / len(actuals) if actuals else None,
             "calibration": calibration,
             "per_event_type": per_type_brier,
+        }
+
+        high_rows = get_resolved_predictions_by_confidence(conn, "high")
+        low_rows = get_resolved_predictions_by_confidence(conn, "low")
+        unknown_rows = get_resolved_predictions_by_confidence(conn, "unknown")
+
+        return {
+            # V1-compat top-level fields (existing frontend code reads these)
+            "n_resolved": len(preds),
+            "brier_aggregate": brier,
+            "base_rate": aggregate["base_rate"],
+            "calibration": calibration,
+            "per_event_type": per_type_brier,
+            # P0.2 breakdown by ingest-volume confidence
+            "aggregate": aggregate,
+            "high_confidence": _summarize_confidence_bucket(high_rows),
+            "low_confidence": _summarize_confidence_bucket(low_rows),
+            "unknown_confidence": _summarize_confidence_bucket(unknown_rows),
         }
     finally:
         conn.close()

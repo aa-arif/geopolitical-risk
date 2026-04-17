@@ -142,6 +142,32 @@ export default function Methodology() {
         </div>
       </div>
 
+      {/* Ingest Confidence */}
+      <div style={sectionStyle}>
+        <h3 style={headingStyle}>Ingest Confidence Flag</h3>
+        <div style={bodyStyle}>
+          <p>
+            Every resolution is tagged with an ingest confidence level. We compute the average daily ingest
+            volume during the 30-day prediction window and compare it to the 90-day baseline preceding the
+            window. If the window's volume falls within &plusmn;2 standard deviations of the baseline, the
+            resolution is marked <strong>high confidence</strong>. Otherwise it is marked
+            <strong> low confidence</strong> and reported separately. For countries with sparse baseline
+            data (fewer than 60 non-zero days), we mark the resolution as <strong>unknown confidence</strong>.
+          </p>
+          <p style={{ marginTop: '.5rem' }}>
+            This flag does not change the Brier score calculation itself. It lets us publish a headline
+            score that excludes resolutions where our underlying data surface shifted meaningfully during
+            the window, while still reporting all-in scores alongside for transparency.
+          </p>
+          <p style={{ marginTop: '.5rem' }}>
+            The deviation is measured on <code style={{ color: '#4fc3f7' }}>pulled_at</code> (when our
+            pipeline recorded the event) rather than <code style={{ color: '#4fc3f7' }}>event_date</code>
+            (when it happened on the ground), so the flag detects pipeline degradation -- GDELT rate
+            limiting, LLM classification drift, NewsAPI outages -- rather than real-world quiet periods.
+          </p>
+        </div>
+      </div>
+
       {/* Data Sources */}
       <div style={sectionStyle}>
         <h3 style={headingStyle}>Data Sources</h3>
