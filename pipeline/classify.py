@@ -18,6 +18,7 @@ from datetime import datetime, timedelta
 
 from config.settings import EVENT_TYPE_RESOLUTION
 from utils.api_client import generate_with_tool
+from pipeline.ingest import _parse_gdelt_date
 from utils.db import get_connection, insert_conflict_event
 from utils.logger import logger
 
@@ -214,9 +215,13 @@ def classify_and_store(conn, country_config: dict, batch_size: int = 5,
             if not article:
                 continue
 
-            event_date = (article.get("published_date") or "")[:10]
-            if not event_date or len(event_date) < 10:
-                event_date = datetime.now().astimezone().strftime("%Y-%m-%d")
+            event_date = _parse_gdelt_date(article.get("published_date") or "")
+            if not event_date:
+                logger.warning(
+                    "Skipping article %d: unparseable published_date %r",
+                    article.get("id"), article.get("published_date"),
+                )
+                continue
 
             try:
                 insert_conflict_event(
