@@ -1,6 +1,6 @@
 """
 Data ingestion pipeline.
-Fetches data from ACLED (OAuth), NewsAPI, GDELT, RSS feeds (feedparser + trafilatura).
+Fetches data from NewsAPI, GDELT, RSS feeds (feedparser + trafilatura).
 """
 
 import json
@@ -19,7 +19,6 @@ import requests
 import trafilatura
 
 from config.settings import (
-    ACLED_API_BASE, ACLED_TOKEN_URL, ACLED_EMAIL, ACLED_PASSWORD,
     GDELT_API_BASE, NEWSAPI_KEY,
 )
 from utils.db import get_connection, insert_article, insert_conflict_event
@@ -174,179 +173,6 @@ def fetch_full_texts_parallel(urls: list, max_workers: int = 5,
                 results[url] = ""
 
     return results
-
-
-# --- ACLED OAuth Token Cache ---
-_acled_token_cache = {
-    "token": None,
-    "expires_at": 0.0,  # unix timestamp
-}
-
-
-def _get_acled_token() -> str:
-    """
-    Get a valid ACLED OAuth access token, refreshing if expired.
-    Tokens are valid for 24 hours; we refresh at 23 hours to be safe.
-    """
-    now = time.time()
-    if _acled_token_cache["token"] and now < _acled_token_cache["expires_at"]:
-        return _acled_token_cache["token"]
-
-    logger.info("Requesting new ACLED OAuth token...")
-    resp = requests.post(
-        ACLED_TOKEN_URL,
-        data={
-            "username": ACLED_EMAIL,
-            "password": ACLED_PASSWORD,
-            "grant_type": "password",
-            "client_id": "acled",
-        },
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    token = data["access_token"]
-
-    # Cache with 23-hour expiry (actual is 24h)
-    _acled_token_cache["token"] = token
-    _acled_token_cache["expires_at"] = now + 23 * 3600
-
-    logger.info("ACLED OAuth token acquired (expires in 23h).")
-    return token
-
-
-# ACLED API uses full country names, not ISO3 codes.
-# Built dynamically from country configs; uses acled_country_name if present.
-_ISO3_TO_COUNTRY_NAME = None
-
-
-def _get_iso3_mapping():
-    """Build ISO3 -> ACLED country name mapping from all available configs."""
-    global _ISO3_TO_COUNTRY_NAME
-    if _ISO3_TO_COUNTRY_NAME is None:
-        from config.settings import load_all_available_country_configs
-        mapping = {}
-        for iso3, cfg in load_all_available_country_configs().items():
-            mapping[iso3] = cfg.get("acled_country_name", cfg["name"])
-        _ISO3_TO_COUNTRY_NAME = mapping
-    return _ISO3_TO_COUNTRY_NAME
-
-
-def ingest_acled(country_iso3: str, days: int = 30) -> int:
-    """
-    DEPRECATED: ACLED has prohibited predictive/early warning use cases.
-    See: "The development of predictive or early warning systems using
-    ACLED data is not permitted under our Terms & Conditions."
-
-    This function is retained for backward compatibility but skips execution.
-    Use GDELT (ingest_gdelt_events) + LLM classification (pipeline/classify.py)
-    as the primary event data sources.
-
-    Returns 0 (no events ingested).
-    """
-    logger.info("ACLED ingestion skipped (deprecated: ToS prohibits predictive use).")
-    return 0
-
-    # --- Original implementation preserved below for reference ---
-    if not ACLED_EMAIL or not ACLED_PASSWORD:
-        logger.warning("ACLED credentials not set. Skipping ACLED ingestion.")
-        return 0
-
-    country_name = _get_iso3_mapping().get(country_iso3)
-    if not country_name:
-        logger.error("No ACLED country name mapping for %s", country_iso3)
-        return 0
-
-    try:
-        token = _get_acled_token()
-    except requests.exceptions.RequestException as e:
-        logger.error("ACLED OAuth failed: %s", e)
-        return 0
-
-    start_date = (datetime.now().astimezone() - timedelta(days=days)).strftime("%Y-%m-%d")
-
-    # Paginated fetch -- ACLED caps at 5000 per request
-    PAGE_SIZE = 5000
-    MAX_EVENTS = 20000
-    all_events = []
-    page = 1
-
-    while len(all_events) < MAX_EVENTS:
-        params = {
-            "country": country_name,
-            "event_date": f"{start_date}|",
-            "event_date_where": ">=",
-            "limit": PAGE_SIZE,
-            "page": page,
-        }
-        try:
-            resp = requests.get(
-                ACLED_API_BASE,
-                params=params,
-                headers={"Authorization": f"Bearer {token}"},
-                timeout=120,
-            )
-            resp.raise_for_status()
-            data = resp.json()
-        except requests.exceptions.RequestException as e:
-            logger.error("ACLED fetch failed for %s (page %d): %s", country_iso3, page, e)
-            break
-
-        events = data.get("data", [])
-        total_available = data.get("total_count", 0)
-        all_events.extend(events)
-
-        if not events:
-            break
-
-        logger.info("ACLED %s page %d: %d/%d fetched (total available: %s)",
-                    country_iso3, page, len(all_events), total_available, total_available)
-
-        if len(all_events) >= total_available or len(events) < PAGE_SIZE:
-            break
-        page += 1
-
-    if not all_events:
-        logger.info("No ACLED events for %s in last %d days.", country_iso3, days)
-        return 0
-
-    conn = get_connection()
-    try:
-        count = 0
-        for ev in all_events:
-            try:
-                conn.execute(
-                    """INSERT INTO acled_events
-                       (country_iso3, event_date, event_type, sub_event_type,
-                        fatalities, latitude, longitude, source, notes)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                       ON CONFLICT(country_iso3, event_date, event_type,
-                                   sub_event_type, latitude, longitude)
-                       DO UPDATE SET
-                           fatalities = excluded.fatalities,
-                           notes = excluded.notes,
-                           source = excluded.source""",
-                    (
-                        country_iso3,
-                        ev.get("event_date", ""),
-                        ev.get("event_type", ""),
-                        ev.get("sub_event_type", ""),
-                        int(ev.get("fatalities", 0)),
-                        float(ev.get("latitude", 0)) if ev.get("latitude") else None,
-                        float(ev.get("longitude", 0)) if ev.get("longitude") else None,
-                        ev.get("source", ""),
-                        ev.get("notes", "")[:500],
-                    ),
-                )
-                count += 1
-            except sqlite3.IntegrityError as e:
-                logger.debug("Skipping ACLED event: %s", e)
-
-        conn.commit()
-        logger.info("Ingested %d ACLED events for %s.", count, country_iso3)
-        return count
-    finally:
-        conn.close()
 
 
 def ingest_rss(country_config: dict) -> int:
@@ -727,8 +553,6 @@ def ingest_newsapi(country_config: dict, days: int = 7) -> int:
 
 def ingest_all(country_config: dict, skip_gdelt: bool = False) -> dict:
     """Run all ingestion for a single country. Returns counts."""
-    iso3 = country_config["iso3"]
-
     # NewsAPI first, fall back to RSS if NewsAPI returns < 5
     newsapi_count = ingest_newsapi(country_config)
     rss_count = 0
@@ -742,7 +566,6 @@ def ingest_all(country_config: dict, skip_gdelt: bool = False) -> dict:
         gdelt_ev = ingest_gdelt_events(country_config)
 
     return {
-        "acled": ingest_acled(iso3),
         "newsapi": newsapi_count,
         "rss": rss_count,
         "gdelt_articles": gdelt_art,

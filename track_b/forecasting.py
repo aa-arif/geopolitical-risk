@@ -225,17 +225,17 @@ For each type with P > 0.10, provide a one-sentence key driver in event_type_dri
 """
 
 
-def _format_acled_summary(acled_data: dict) -> str:
+def _format_event_summary(event_data: dict) -> str:
     """Format conflict event summary data into readable text for prompts."""
-    if not acled_data or acled_data.get("total_events", 0) == 0:
+    if not event_data or event_data.get("total_events", 0) == 0:
         return "No conflict events recorded in the lookback period."
 
     lines = [
-        f"Total events (last {acled_data['period_days']} days): {acled_data['total_events']}",
-        f"Total fatalities: {acled_data['total_fatalities']}",
+        f"Total events (last {event_data['period_days']} days): {event_data['total_events']}",
+        f"Total fatalities: {event_data['total_fatalities']}",
         "Breakdown by type:",
     ]
-    for entry in acled_data.get("by_type", []):
+    for entry in event_data.get("by_type", []):
         lines.append(
             f"  - {entry['event_type']}: {entry['count']} events, "
             f"{entry.get('total_fatalities', 0)} fatalities"
@@ -244,7 +244,7 @@ def _format_acled_summary(acled_data: dict) -> str:
 
 
 def forecast_baserate(country_config: dict, track_a_result: dict,
-                      reasoning_summary: str, acled_data: dict) -> dict:
+                      reasoning_summary: str, event_data: dict) -> dict:
     """Agent 1: Base Rate Adjustment using CHAMPS KNOW methodology."""
     template = load_prompt("champs_baserate")
     prob = track_a_result["probability"]
@@ -260,7 +260,7 @@ def forecast_baserate(country_config: dict, track_a_result: dict,
         neighborhood_risk=f"{components['neighborhood_contagion']:.2f}",
         gpr_trend=components["gpr_trend_description"],
         reasoning_chains_summary=reasoning_summary,
-        acled_summary=_format_acled_summary(acled_data),
+        event_summary=_format_event_summary(event_data),
     )
 
     prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
@@ -278,7 +278,7 @@ def forecast_baserate(country_config: dict, track_a_result: dict,
 
 
 def forecast_analogy(country_config: dict, track_a_result: dict,
-                     reasoning_summary: str, acled_data: dict) -> dict:
+                     reasoning_summary: str, event_data: dict) -> dict:
     """Agent 2: Historical Analogy reasoning."""
     template = load_prompt("champs_analogy")
     prob = track_a_result["probability"]
@@ -303,7 +303,7 @@ def forecast_analogy(country_config: dict, track_a_result: dict,
 
 
 def forecast_decomposition(country_config: dict, track_a_result: dict,
-                           reasoning_summary: str, acled_data: dict) -> dict:
+                           reasoning_summary: str, event_data: dict) -> dict:
     """Agent 3: Question Decomposition."""
     template = load_prompt("champs_decomp")
     prob = track_a_result["probability"]
@@ -328,7 +328,7 @@ def forecast_decomposition(country_config: dict, track_a_result: dict,
 
 
 def forecast_devil(country_config: dict, track_a_result: dict,
-                   reasoning_summary: str, acled_data: dict,
+                   reasoning_summary: str, event_data: dict,
                    preliminary_forecasts: list) -> dict:
     """Agent 4: Devil's Advocate (runs after agents 1-3 to challenge consensus)."""
     template = load_prompt("champs_devil")
@@ -365,7 +365,7 @@ def forecast_devil(country_config: dict, track_a_result: dict,
         preliminary_average=f"{avg * 100:.1f}",
         agent_reasoning=agent_reasoning,
         reasoning_chains_summary=reasoning_summary,
-        acled_summary=_format_acled_summary(acled_data),
+        event_summary=_format_event_summary(event_data),
     )
     prompt += _EVENT_TYPE_ADDENDUM.format(country_name=country_config["name"])
 
@@ -389,7 +389,7 @@ def _validate_forecast(result: dict, track_a_prob: float = None) -> None:
 
 
 def run_ensemble(country_config: dict, track_a_result: dict,
-                 reasoning_summary: str, acled_data: dict) -> list:
+                 reasoning_summary: str, event_data: dict) -> list:
     """
     Run all 4 forecasting agents and return their results.
     Agents 1-3 run concurrently, then Agent 4 runs with their results.
@@ -406,7 +406,7 @@ def run_ensemble(country_config: dict, track_a_result: dict,
         for idx, (name, func) in enumerate(agent_funcs):
             future = executor.submit(
                 func, country_config, track_a_result,
-                reasoning_summary, acled_data,
+                reasoning_summary, event_data,
             )
             future_to_idx[future] = idx
 
@@ -425,7 +425,7 @@ def run_ensemble(country_config: dict, track_a_result: dict,
     # Agent 4 gets the preliminary results
     try:
         results.append(forecast_devil(country_config, track_a_result,
-                                      reasoning_summary, acled_data, results[:3]))
+                                      reasoning_summary, event_data, results[:3]))
     except Exception as e:
         logger.error("Agent 4 (devil) failed: %s", e, exc_info=True)
         results.append({

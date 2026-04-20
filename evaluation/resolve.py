@@ -21,7 +21,6 @@ import numpy as np
 from config.settings import EVENT_TYPE_RESOLUTION, CALIBRATED_EVENT_TYPES
 from utils.db import (
     get_event_count, compute_event_threshold_by_category,
-    compute_event_threshold,
 )
 from evaluation.brier import brier_score
 from utils.logger import logger
@@ -166,12 +165,13 @@ def compute_ingest_deviation(conn, iso3, pred_date, window_end, event_category):
 
 def _resolve_composite_legacy(conn, iso3, pred_date, window_end, stored_threshold):
     """
-    Resolve a composite/V1 prediction for backward compatibility.
+    Resolve a composite/V1 prediction using conflict_events (ACE with fatalities).
 
-    Tries conflict_events (ACE with fatalities) first, then falls back
-    to the legacy ACLED-based resolution for old predictions.
+    Source-agnostic: counts ACE events from all sources in the unified
+    conflict_events table (GDELT, internal LLM-classified, etc.) as the
+    closest match to the original V1 "significant political instability"
+    criterion.
     """
-    # Primary: unified conflict_events (ACE = armed conflict)
     ace_count = get_event_count(
         conn, iso3, pred_date, window_end,
         event_category="ACE", require_fatalities=True,
@@ -183,26 +183,6 @@ def _resolve_composite_legacy(conn, iso3, pred_date, window_end, stored_threshol
             "event_count": ace_count,
             "threshold": stored_threshold,
             "resolution_source": "conflict_events_ACE",
-        }
-
-    # Fallback: legacy ACLED events (for old predictions before migration)
-    acled_cursor = conn.execute(
-        """SELECT COUNT(*) as cnt FROM acled_events
-           WHERE country_iso3 = ?
-           AND event_date >= ? AND event_date <= ?
-           AND event_type IN ('Battles', 'Explosions/Remote violence',
-                              'Violence against civilians')
-           AND fatalities > 0""",
-        (iso3, pred_date, window_end),
-    )
-    acled_count = acled_cursor.fetchone()["cnt"]
-
-    if acled_count > 0 and stored_threshold and stored_threshold > 0:
-        return {
-            "actual_outcome": 1 if acled_count > stored_threshold else 0,
-            "event_count": acled_count,
-            "threshold": stored_threshold,
-            "resolution_source": "acled_violent_legacy",
         }
 
     # Last resort: GDELT conflict events
@@ -231,7 +211,8 @@ def resolve_expired_predictions(conn, country_iso3: str = None):
 
     Supports both:
     - V2 per-event-type predictions (resolved against EVENT_TYPE_RESOLUTION config)
-    - V1 composite predictions (resolved using legacy ACE/ACLED fallback)
+    - V1 composite predictions (resolved using ACE events from conflict_events,
+      with a final GDELT fallback for very old predictions)
 
     Returns list of resolved prediction dicts.
     """

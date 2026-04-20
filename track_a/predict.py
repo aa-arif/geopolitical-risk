@@ -72,17 +72,13 @@ def predict_track_a(country_config: dict, db_conn) -> dict:
     )
     combined = float(np.clip(_from_logit(combined_logit), 0.02, 0.95))
 
-    # Conflict event floor: prevents underestimation for countries with
-    # ongoing armed conflict that the polity score doesn't capture
-    # (e.g. Philippines: democracy but active insurgency).
-    # Queries the unified conflict_events table (source-agnostic).
+    # Conflict floor intentionally zeroed 2026-04-20. Prior ACLED-based floor gave
+    # 5 countries (NGA/BGD/PAK/PHL/TUR) an uneven advantage under the 2024-2025 data
+    # they had. Uniform zero across all 22 ensures clean Track A comparability for
+    # the May 15 resolution cycle. Revisit if first-resolution Brier shows Track A
+    # systematically underpredicting in sustained-conflict countries.
     conflict_floor = 0.0
     avg_monthly_events = _get_avg_monthly_conflict_events(db_conn, country_config["iso3"])
-    if avg_monthly_events > 100:
-        conflict_floor = 0.12
-    elif avg_monthly_events > 50:
-        conflict_floor = 0.08
-    combined = max(combined, conflict_floor)
 
     return {
         "probability": combined,

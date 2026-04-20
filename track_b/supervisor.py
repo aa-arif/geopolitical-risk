@@ -143,7 +143,7 @@ def _extract_reasoning_text(agent_result: dict) -> str:
 
 def reconcile(country_config: dict, track_a_result: dict,
               ensemble_results: list, reasoning_summary: str = "",
-              acled_data: dict = None) -> dict:
+              event_data: dict = None) -> dict:
     """
     Reconcile 4 agent forecasts into a single Track B probability.
 
@@ -154,7 +154,7 @@ def reconcile(country_config: dict, track_a_result: dict,
         track_a_result: Track A structural prediction
         ensemble_results: List of 4 agent forecast dicts
         reasoning_summary: Full reasoning chain summary text
-        acled_data: ACLED event summary dict
+        event_data: Conflict event summary dict (from conflict_events table)
 
     Returns:
         Supervisor reconciliation result with final_probability
@@ -178,12 +178,12 @@ def reconcile(country_config: dict, track_a_result: dict,
 
     # Format event summary (source-agnostic: supports both old by_type and new by_category)
     event_text = "No conflict event data available."
-    if acled_data and acled_data.get("total_events", 0) > 0:
+    if event_data and event_data.get("total_events", 0) > 0:
         event_text = (
-            f"Total events (last {acled_data.get('period_days', 30)} days): "
-            f"{acled_data['total_events']}, Fatalities: {acled_data.get('total_fatalities', 0)}"
+            f"Total events (last {event_data.get('period_days', 30)} days): "
+            f"{event_data['total_events']}, Fatalities: {event_data.get('total_fatalities', 0)}"
         )
-        for entry in acled_data.get("by_category", acled_data.get("by_type", []))[:5]:
+        for entry in event_data.get("by_category", event_data.get("by_type", []))[:5]:
             label = entry.get("event_category", entry.get("event_type", "unknown"))
             event_text += f"\n  {label}: {entry['count']} events"
 
@@ -200,7 +200,7 @@ def reconcile(country_config: dict, track_a_result: dict,
         country_name=country_config["name"],
         track_a_probability=f"{track_a_result['probability'] * 100:.1f}",
         track_a_breakdown=track_a_breakdown,
-        acled_summary=event_text,
+        event_summary=event_text,
         reasoning_chains_summary=reasoning_summary or "No causal factors extracted.",
         agent_1_probability=f"{agents[0]['final_probability'] * 100:.1f}",
         agent_1_reasoning=_extract_reasoning_text(agents[0]),

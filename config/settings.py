@@ -19,8 +19,6 @@ PROMPTS_DIR = Path(__file__).parent / "prompts"
 
 # --- API Keys (from environment) ---
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
-ACLED_EMAIL = os.environ.get("ACLED_EMAIL", "")
-ACLED_PASSWORD = os.environ.get("ACLED_PASSWORD", "")
 NEWSAPI_KEY = os.environ.get("NEWSAPI_KEY", "")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 ALERT_FROM_EMAIL = os.environ.get("ALERT_FROM_EMAIL", "alerts@precursion.ai")
@@ -49,7 +47,7 @@ if _WEIGHT_OVERRIDE_PATH.exists():
 
 # --- Prediction Parameters ---
 PREDICTION_WINDOW_DAYS = 30
-ACLED_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
+EVENT_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
 NEIGHBORHOOD_LOOKBACK_DAYS = 90
 
 # --- Event Type Resolution (source-agnostic) ---
@@ -145,8 +143,6 @@ PROMPT_VERSIONS = {
 }
 
 # --- Data Source URLs ---
-ACLED_API_BASE = "https://acleddata.com/api/acled/read"
-ACLED_TOKEN_URL = "https://acleddata.com/oauth/token"
 GDELT_API_BASE = "http://api.gdeltproject.org/api/v2/doc/doc"
 WORLD_BANK_API_BASE = "https://api.worldbank.org/v2"
 

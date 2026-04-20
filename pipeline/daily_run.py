@@ -32,7 +32,7 @@ from utils.db import (
     get_connection, initialize_db, get_recent_articles,
     get_recent_reasoning_chains, get_event_summary,
     get_latest_event_date, get_latest_article_id,
-    compute_event_threshold, compute_event_threshold_by_category,
+    compute_event_threshold_by_category,
     insert_agent_outputs, get_resolved_predictions,
 )
 from utils.logger import logger, compute_data_hash, log_prediction
@@ -113,8 +113,13 @@ def step_track_a(ctx):
 
     # Compute event thresholds committed at prediction time (no look-ahead).
     # Composite threshold (V1 backward compat) + per-type thresholds.
+    # Composite uses ACE-with-fatalities from conflict_events to match
+    # _resolve_composite_legacy's resolution criterion.
     today = datetime.now().astimezone().strftime("%Y-%m-%d")
-    event_threshold = compute_event_threshold(conn, iso3, months=12, before_date=today)
+    event_threshold = compute_event_threshold_by_category(
+        conn, iso3, "ACE", require_fatalities=True,
+        months=12, before_date=today,
+    )
 
     from config.settings import EVENT_TYPE_RESOLUTION, CALIBRATED_EVENT_TYPES
     event_type_thresholds = {}
@@ -231,7 +236,7 @@ def step_track_b(ctx):
     logger.info("[5b/9] Running supervisor reconciliation...")
     supervisor_result = reconcile(config, track_a, ensemble_results,
                                    reasoning_summary=reasoning_summary,
-                                   acled_data=event_data)
+                                   event_data=event_data)
 
     ctx["reasoning_summary"] = reasoning_summary
     ctx["event_data"] = event_data

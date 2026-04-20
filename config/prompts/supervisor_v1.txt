@@ -7,8 +7,8 @@ STRUCTURAL BASE RATE (Track A): {track_a_probability}%
 TRACK A COMPONENT BREAKDOWN:
 {track_a_breakdown}
 
-RECENT ACLED EVENT DATA:
-{acled_summary}
+RECENT EVENT DATA:
+{event_summary}
 
 CAUSAL FACTORS FROM REPORTING:
 {reasoning_chains_summary}

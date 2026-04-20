@@ -51,11 +51,6 @@ def main():
         ).fetchone()
         pred_date = pred_row["prediction_date"] if pred_row else "never"
 
-        # ACLED count
-        acled_count = conn.execute(
-            "SELECT COUNT(*) FROM acled_events WHERE country_iso3 = ?", (iso3,)
-        ).fetchone()[0]
-
         # Article count
         article_count = conn.execute(
             "SELECT COUNT(*) FROM articles WHERE country_iso3 = ?", (iso3,)
@@ -75,16 +70,12 @@ def main():
             else:
                 healthy += 1
 
-        if acled_count == 0:
-            if status == "OK":
-                status = "NO ACLED"
-            warn_count += 1
         if article_count < 5:
             if status == "OK":
                 status = "LOW ARTICLES"
             warn_count += 1
 
-        print(f"  {iso3}: last prediction {pred_date}, {acled_count} ACLED events, {article_count} articles  {status}")
+        print(f"  {iso3}: last prediction {pred_date}, {article_count} articles  {status}")
 
     print()
 

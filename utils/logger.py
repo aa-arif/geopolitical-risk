@@ -37,12 +37,12 @@ if not logger.handlers:
     logger.addHandler(file_handler)
 
 
-def compute_data_hash(country_iso3: str, acled_count: int,
+def compute_data_hash(country_iso3: str, event_count: int,
                       article_count: int, latest_event_date: str = "",
                       latest_article_id: int = 0) -> str:
     """Compute a hash of the data state at prediction time."""
     data_str = (
-        f"{country_iso3}:{acled_count}:{article_count}:"
+        f"{country_iso3}:{event_count}:{article_count}:"
         f"{latest_event_date}:{latest_article_id}:"
         f"{datetime.now().astimezone().date()}"
     )

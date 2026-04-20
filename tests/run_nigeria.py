@@ -73,8 +73,8 @@ def main():
     print(f"  Reasoning summary: {len(reasoning_summary)} chars")
     print()
 
-    # ── Step 3: ACLED summary (empty for now, no live data) ──────────
-    acled_data = {
+    # ── Step 3: Event summary (empty for now, no live data) ──────────
+    event_data = {
         "total_events": 0,
         "total_fatalities": 0,
         "by_type": [],
@@ -85,7 +85,7 @@ def main():
     print("=" * 70)
     print("STEP 3: Track B Forecasting Ensemble (4 agents)")
     print("=" * 70)
-    ensemble_results = run_ensemble(country_config, track_a, reasoning_summary, acled_data)
+    ensemble_results = run_ensemble(country_config, track_a, reasoning_summary, event_data)
     for i, result in enumerate(ensemble_results):
         agent_type = result.get("agent_type", f"agent_{i+1}")
         prob = result["final_probability"]
