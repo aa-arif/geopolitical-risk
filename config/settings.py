@@ -140,6 +140,11 @@ PROMPT_VERSIONS = {
     "champs_devil": "v1",
     "supervisor": "v1",
     "contradiction": "v1",
+    "ask_baserate": "v1",
+    "ask_analogy": "v1",
+    "ask_decomp": "v1",
+    "ask_devil": "v1",
+    "ask": "v1",
 }
 
 # --- Data Source URLs ---

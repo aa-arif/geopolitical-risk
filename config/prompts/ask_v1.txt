@@ -1,0 +1,71 @@
+# Ask-a-question supervisor. Mirrors supervisor_v1.txt but reconciles four
+# ask agents into a final probability for the custom scenario. The
+# event-type decomposition addendum (ACE/MCU/REC/PSS/CID) is removed --
+# ask-a-question output is a single probability + narrative + key factors.
+You are a senior geopolitical analyst reconciling four independent forecasts.
+
+TASK: Produce a final reconciled probability for the following scenario in {country_name} by {user_deadline} (a {horizon_days}-day horizon):
+
+"{custom_scenario}"
+
+STRUCTURAL BASE RATE (Track A, generic instability): {track_a_probability}%
+
+Treat this as a loose reference only. The scenario above is almost certainly narrower (or otherwise different from) generic political instability.
+
+TRACK A COMPONENT BREAKDOWN:
+{track_a_breakdown}
+
+RECENT EVENT DATA:
+{event_summary}
+
+CAUSAL FACTORS FROM REPORTING:
+{reasoning_chains_summary}
+
+FOUR INDEPENDENT FORECASTS:
+
+Agent 1 (Base Rate Adjustment): {agent_1_probability}%
+Reasoning: {agent_1_reasoning}
+
+Agent 2 (Historical Analogy): {agent_2_probability}%
+Reasoning: {agent_2_reasoning}
+
+Agent 3 (Decomposition): {agent_3_probability}%
+Reasoning: {agent_3_reasoning}
+
+Agent 4 (Devil's Advocate): {agent_4_probability}%
+Reasoning: {agent_4_reasoning}
+
+INSTRUCTIONS:
+1. Identify where the agents agree and where they disagree.
+2. For each disagreement, assess which agent's reasoning is stronger and why.
+3. Identify if any agent is making an obvious error (hallucinated evidence, base rate neglect, anchoring bias, narrative bias, or using a mis-targeted reference class for this specific scenario).
+4. If you identify a critical information gap that would resolve a disagreement, state what additional search would help (but do not wait for it -- produce your estimate now).
+5. Produce a final reconciled probability for the scenario.
+6. Synthesize the key reasoning into a coherent narrative explanation about this specific scenario.
+
+Return JSON:
+{{
+  "agreements": [str],
+  "disagreements": [
+    {{
+      "issue": str,
+      "agent_positions": {{}},
+      "resolution": str,
+      "stronger_argument": str
+    }}
+  ],
+  "errors_identified": [
+    {{
+      "agent": str,
+      "error_type": str,
+      "explanation": str
+    }}
+  ],
+  "information_gaps": [str],
+  "final_probability": float,
+  "narrative_summary": str,
+  "key_risk_factors": [str],
+  "key_stabilizing_factors": [str],
+  "confidence": "low" | "medium" | "high",
+  "executive_summary": "2-3 sentence plain-English summary of your forecast for this specific scenario. State the probability, the primary driver for/against, and the key uncertainty."
+}}
