@@ -105,6 +105,75 @@ _SUPERVISOR_SCHEMA = {
 }
 
 
+# --- Ask-a-question supervisor schema ---
+# Same shape as _SUPERVISOR_SCHEMA but without event_type_scores /
+# event_type_drivers. Ad-hoc scenarios don't map to the ACE/MCU/REC/PSS/CID
+# taxonomy, so the reconciled output is a single probability.
+
+_ASK_SUPERVISOR_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "agreements": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "disagreements": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "issue": {"type": "string"},
+                    "agent_positions": {"type": "object"},
+                    "resolution": {"type": "string"},
+                    "stronger_argument": {"type": "string"},
+                },
+                "required": ["issue", "resolution"],
+            },
+        },
+        "errors_identified": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "agent": {"type": "string"},
+                    "error_type": {"type": "string"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["agent", "error_type", "explanation"],
+            },
+        },
+        "information_gaps": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "final_probability": {
+            "type": "number",
+            "description": "Reconciled probability as decimal between 0.0 and 1.0",
+        },
+        "narrative_summary": {"type": "string"},
+        "key_risk_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "key_stabilizing_factors": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "confidence": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+        },
+        "executive_summary": {
+            "type": "string",
+            "description": "2-3 sentence plain-English summary of the forecast for this specific scenario.",
+        },
+    },
+    "required": ["agreements", "disagreements", "final_probability",
+                 "narrative_summary", "key_risk_factors", "key_stabilizing_factors",
+                 "confidence", "executive_summary"],
+}
+
+
 def _extract_reasoning_text(agent_result: dict) -> str:
     """Extract a concise reasoning summary from an agent's result."""
     agent_type = agent_result.get("agent_type", "unknown")
@@ -264,6 +333,94 @@ For each type with P > 0.10, provide a one-sentence key driver in event_type_dri
         result["event_type_scores"].get("REC", 0),
         result["event_type_scores"].get("PSS", 0),
         result["event_type_scores"].get("CID", 0),
+    )
+
+    return result
+
+
+def reconcile_ask(country_config: dict, track_a_result: dict,
+                  ensemble_results: list, scenario: str,
+                  user_deadline: str, horizon_days: int,
+                  reasoning_summary: str = "",
+                  event_data: dict = None) -> dict:
+    """
+    Reconcile 4 ask-agent forecasts into a single probability for a
+    user-specified scenario. Mirrors reconcile() but loads ask_v1.txt
+    and uses _ASK_SUPERVISOR_SCHEMA (no event-type decomposition).
+    """
+    template = load_prompt("ask")
+
+    agents = ensemble_results + [{"final_probability": 0.15, "agent_type": "missing"}] * 4
+    agents = agents[:4]
+
+    components = track_a_result.get("components", {})
+    track_a_breakdown = (
+        f"PITF base probability: {components.get('pitf_base', 0)*100:.1f}%\n"
+        f"Structural vulnerability: {components.get('structural_vulnerability', 0):.3f}\n"
+        f"Neighborhood contagion: {components.get('neighborhood_contagion', 0):.3f}\n"
+        f"GPR trend: {components.get('gpr_trend', 0):+.2f} "
+        f"({components.get('gpr_trend_description', 'N/A')})\n"
+        f"Conflict event monthly avg: "
+        f"{components.get('conflict_avg_monthly', 0):.0f} events"
+    )
+
+    event_text = "No conflict event data available."
+    if event_data and event_data.get("total_events", 0) > 0:
+        event_text = (
+            f"Total events (last {event_data.get('period_days', 30)} days): "
+            f"{event_data['total_events']}, "
+            f"Fatalities: {event_data.get('total_fatalities', 0)}"
+        )
+        for entry in event_data.get("by_category", event_data.get("by_type", []))[:5]:
+            label = entry.get("event_category", entry.get("event_type", "unknown"))
+            event_text += f"\n  {label}: {entry['count']} events"
+
+    prompt = template.format(
+        country_name=country_config["name"],
+        custom_scenario=scenario,
+        user_deadline=user_deadline,
+        horizon_days=horizon_days,
+        track_a_probability=f"{track_a_result['probability'] * 100:.1f}",
+        track_a_breakdown=track_a_breakdown,
+        event_summary=event_text,
+        reasoning_chains_summary=reasoning_summary or "No causal factors extracted.",
+        agent_1_probability=f"{agents[0]['final_probability'] * 100:.1f}",
+        agent_1_reasoning=_extract_reasoning_text(agents[0]),
+        agent_2_probability=f"{agents[1]['final_probability'] * 100:.1f}",
+        agent_2_reasoning=_extract_reasoning_text(agents[1]),
+        agent_3_probability=f"{agents[2]['final_probability'] * 100:.1f}",
+        agent_3_reasoning=_extract_reasoning_text(agents[2]),
+        agent_4_probability=f"{agents[3]['final_probability'] * 100:.1f}",
+        agent_4_reasoning=_extract_reasoning_text(agents[3]),
+    )
+
+    result = generate_with_tool(
+        prompt=prompt,
+        tool_name="submit_reconciliation",
+        tool_schema=_ASK_SUPERVISOR_SCHEMA,
+        model="opus",
+        temperature=0.2,
+        max_tokens=4096,
+    )
+
+    if "final_probability" not in result:
+        import statistics
+        probs = sorted([a["final_probability"] for a in agents[:4]])
+        result["final_probability"] = statistics.median(probs)
+
+    validate_probability(result)
+
+    if "confidence" not in result:
+        result["confidence"] = "medium"
+    if "executive_summary" not in result:
+        result["executive_summary"] = ""
+
+    logger.info(
+        "Ask supervisor reconciled %s: P=%.3f (confidence=%s) scenario=%r",
+        country_config["iso3"],
+        result["final_probability"],
+        result["confidence"],
+        scenario[:60],
     )
 
     return result

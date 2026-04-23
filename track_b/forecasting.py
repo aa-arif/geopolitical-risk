@@ -208,6 +208,161 @@ for _schema in [_BASERATE_SCHEMA, _ANALOGY_SCHEMA, _DECOMP_SCHEMA, _DEVIL_SCHEMA
     _schema["properties"].update(_EVENT_TYPE_SCORES_PROPERTY)
 
 
+# --- Ask-a-question variants ---
+# Same shape as the daily schemas but without event_type_scores /
+# event_type_drivers. Ad-hoc scenarios don't map to the ACE/MCU/REC/PSS/CID
+# taxonomy, so the supervisor output is a single probability only.
+
+_ASK_BASERATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "base_rate_acknowledged": {
+            "type": "number",
+            "description": "The base rate probability (0.0-1.0) you are anchoring to",
+        },
+        "upward_adjustments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "factor": {"type": "string"},
+                    "magnitude": {"type": "number"},
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["factor", "magnitude", "reasoning"],
+            },
+        },
+        "downward_adjustments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "factor": {"type": "string"},
+                    "magnitude": {"type": "number"},
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["factor", "magnitude", "reasoning"],
+            },
+        },
+        "final_probability": {
+            "type": "number",
+            "description": "Final probability as decimal between 0.0 and 1.0",
+        },
+        "confidence_in_estimate": {
+            "type": "string",
+            "enum": ["low", "medium", "high"],
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["base_rate_acknowledged", "upward_adjustments", "downward_adjustments",
+                 "final_probability", "confidence_in_estimate", "key_uncertainties"],
+}
+
+_ASK_ANALOGY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "analogies": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "country": {"type": "string"},
+                    "year": {"type": "integer"},
+                    "situation": {"type": "string"},
+                    "similarity": {"type": "string"},
+                    "difference": {"type": "string"},
+                    "outcome": {"type": "string"},
+                    "implied_probability": {"type": "number"},
+                },
+                "required": ["country", "year", "situation", "similarity",
+                             "difference", "outcome", "implied_probability"],
+            },
+        },
+        "synthesis": {"type": "string"},
+        "final_probability": {"type": "number"},
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["analogies", "synthesis", "final_probability", "key_uncertainties"],
+}
+
+_ASK_DECOMP_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sub_questions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "question": {"type": "string"},
+                    "probability": {
+                        "type": "number",
+                        "minimum": 0.0,
+                        "maximum": 1.0,
+                        "description": "Decimal in [0.0, 1.0], e.g. 0.25 for 25%",
+                    },
+                    "reasoning": {"type": "string"},
+                },
+                "required": ["question", "probability", "reasoning"],
+            },
+        },
+        "combination_logic": {"type": "string"},
+        "final_probability": {
+            "type": "number",
+            "minimum": 0.0,
+            "maximum": 1.0,
+            "description": "Decimal in [0.0, 1.0], e.g. 0.25 for 25%",
+        },
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["sub_questions", "combination_logic", "final_probability",
+                 "key_uncertainties"],
+}
+
+_ASK_DEVIL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "consensus_challenged": {"type": "string"},
+        "contrarian_arguments": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "argument": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "strength": {"type": "string", "enum": ["weak", "moderate", "strong"]},
+                },
+                "required": ["argument", "evidence", "strength"],
+            },
+        },
+        "what_consensus_overweights": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "what_consensus_underweights": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "final_probability": {"type": "number"},
+        "key_uncertainties": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["consensus_challenged", "contrarian_arguments",
+                 "what_consensus_overweights", "what_consensus_underweights",
+                 "final_probability", "key_uncertainties"],
+}
+
+
 # --- Event-type decomposition prompt addendum ---
 # Appended to each agent prompt for V2 event-type scoring.
 _EVENT_TYPE_ADDENDUM = """
