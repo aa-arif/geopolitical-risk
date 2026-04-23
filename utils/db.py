@@ -276,12 +276,45 @@ def initialize_db():
         conn.execute("ALTER TABLE predictions ADD COLUMN ingest_deviation_sigma REAL DEFAULT NULL")
         conn.commit()
 
+    # --- Migration: ask-a-question columns (Day 1 feature build) ---
+    _ask_columns = [
+        ("source", "TEXT DEFAULT 'daily'"),
+        ("custom_scenario", "TEXT DEFAULT NULL"),
+        ("user_email", "TEXT DEFAULT NULL"),
+        ("user_deadline", "TEXT DEFAULT NULL"),
+        ("user_useful", "BOOLEAN DEFAULT NULL"),
+        ("user_note", "TEXT DEFAULT NULL"),
+        ("external_resolution_source", "TEXT DEFAULT NULL"),
+        ("external_resolution_id", "TEXT DEFAULT NULL"),
+        ("response_time_ms", "INTEGER DEFAULT NULL"),
+        ("cost_usd", "REAL DEFAULT NULL"),
+        ("request_hash", "TEXT DEFAULT NULL"),
+    ]
+    for _col_name, _col_spec in _ask_columns:
+        try:
+            conn.execute(f"SELECT {_col_name} FROM predictions LIMIT 1")
+        except Exception:
+            conn.execute(f"ALTER TABLE predictions ADD COLUMN {_col_name} {_col_spec}")
+            conn.commit()
+
+    conn.executescript("""
+        CREATE INDEX IF NOT EXISTS idx_predictions_source_email
+            ON predictions(source, user_email) WHERE source = 'ask';
+        CREATE INDEX IF NOT EXISTS idx_predictions_request_hash
+            ON predictions(request_hash) WHERE request_hash IS NOT NULL;
+    """)
+    conn.commit()
+
     # Deduplicate predictions before creating unique index (keep latest id per group)
-    # Groups by (country, date, event_type) to support V2 per-type predictions
+    # Groups by (country, date, event_type, request_hash) so daily predictions
+    # dedup as before while ask-a-question rows (same country/date/event_type='ask',
+    # different scenarios) coexist via distinct request_hash values.
     conn.execute("""
         DELETE FROM predictions WHERE id NOT IN (
             SELECT MAX(id) FROM predictions
-            GROUP BY country_iso3, prediction_date, COALESCE(event_type, 'composite')
+            GROUP BY country_iso3, prediction_date,
+                     COALESCE(event_type, 'composite'),
+                     COALESCE(request_hash, '')
         )
     """)
     # Deduplicate gdelt_conflict_events before creating unique index
@@ -299,12 +332,15 @@ def initialize_db():
         )
     """)
 
-    # Migrate predictions unique index: drop old (country, date) and create
-    # new (country, date, event_type) to support V2 per-type predictions.
+    # Migrate predictions unique index: drop old and create a version that
+    # also accounts for request_hash so multiple ask-a-question submissions
+    # (same country/date/event_type='ask', different scenarios) can coexist.
     conn.executescript("""
         DROP INDEX IF EXISTS idx_predictions_unique;
         CREATE UNIQUE INDEX IF NOT EXISTS idx_predictions_unique
-            ON predictions(country_iso3, prediction_date, COALESCE(event_type, 'composite'));
+            ON predictions(country_iso3, prediction_date,
+                           COALESCE(event_type, 'composite'),
+                           COALESCE(request_hash, ''));
         CREATE UNIQUE INDEX IF NOT EXISTS idx_conflict_events_unique
             ON conflict_events(country_iso3, event_date, event_category, source, latitude, longitude);
     """)
