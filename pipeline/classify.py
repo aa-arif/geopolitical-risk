@@ -16,7 +16,7 @@ import json
 import sqlite3
 from datetime import datetime, timedelta
 
-from config.settings import EVENT_TYPE_RESOLUTION
+from config.settings import EVENT_TYPE_RESOLUTION, MAX_SINGLE_EVENT_FATALITIES
 from utils.api_client import generate_with_tool
 from pipeline.ingest import _parse_publication_date
 from utils.db import get_connection, insert_conflict_event
@@ -224,15 +224,32 @@ def classify_and_store(conn, country_config: dict, batch_size: int = 5,
                 continue
 
             try:
+                raw_fatalities = clf.get("estimated_fatalities", 0)
+                try:
+                    raw_fatalities = int(raw_fatalities) if raw_fatalities is not None else 0
+                except (TypeError, ValueError):
+                    raw_fatalities = 0
+
+                notes = (clf.get("article_title") or "")[:200]
+                fatalities = raw_fatalities
+                if raw_fatalities > MAX_SINGLE_EVENT_FATALITIES:
+                    logger.warning(
+                        "[FATALITY_CAP] country=%s article_id=%s category=%s raw_fatalities=%d > cap=%d. Zeroing. title=%r",
+                        iso3, article_id, category, raw_fatalities, MAX_SINGLE_EVENT_FATALITIES,
+                        (clf.get("article_title") or "")[:100],
+                    )
+                    fatalities = 0
+                    notes = f"{notes} [FATALITY_CAP orig={raw_fatalities}]"
+
                 insert_conflict_event(
                     conn, iso3, event_date, category, "internal",
                     event_type=clf.get("sub_category"),
-                    fatalities=clf.get("estimated_fatalities", 0),
+                    fatalities=fatalities,
                     severity=clf.get("severity"),
                     source_article_id=article_id,
                     actors=clf.get("key_actors"),
                     confidence=clf.get("confidence"),
-                    notes=clf.get("article_title", "")[:200],
+                    notes=notes,
                 )
                 total_events += 1
             except sqlite3.IntegrityError:

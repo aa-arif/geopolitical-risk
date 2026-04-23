@@ -7,6 +7,9 @@ import json
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
+from config.settings import MAX_SINGLE_EVENT_FATALITIES
+from utils.logger import logger
+
 DB_PATH = Path(__file__).parent.parent / "data" / "geopolitical.db"
 
 
@@ -528,6 +531,21 @@ def insert_conflict_event(conn, country_iso3: str, event_date: str,
                            actors: str = None, confidence: float = None,
                            notes: str = None) -> int:
     """Insert a conflict event into the unified table. Caller must commit."""
+    # Hard backstop: even if a caller bypasses pipeline/classify.py's cap, no
+    # row with fatalities above MAX_SINGLE_EVENT_FATALITIES should be inserted.
+    # The LLM extractor occasionally reads cumulative war totals or cross-country
+    # statistics from article bodies and mis-codes them as single-event fatalities.
+    if fatalities and fatalities > MAX_SINGLE_EVENT_FATALITIES:
+        logger.warning(
+            "[DB_FATALITY_CAP] country=%s event_date=%s category=%s source=%s "
+            "fatalities=%d > cap=%d. Zeroing.",
+            country_iso3, event_date, event_category, source,
+            fatalities, MAX_SINGLE_EVENT_FATALITIES,
+        )
+        hardcap_marker = f" [DB_HARDCAP orig={fatalities}]"
+        notes = (notes or "") + hardcap_marker
+        fatalities = 0
+
     cursor = conn.execute(
         """INSERT INTO conflict_events
            (country_iso3, event_date, event_category, event_type, sub_event_type,

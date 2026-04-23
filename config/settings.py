@@ -50,6 +50,16 @@ PREDICTION_WINDOW_DAYS = 30
 EVENT_THRESHOLD_PERCENTILE = 90  # 90th percentile of 12-month country average
 NEIGHBORHOOD_LOOKBACK_DAYS = 90
 
+# --- Extractor Safety Caps ---
+# Maximum fatalities the LLM extractor may attribute to a SINGLE event before
+# we treat the figure as a coding error and zero it out. The extractor reads
+# cumulative war totals or cross-country statistics from article bodies and
+# mis-codes them as single-event fatalities (e.g. EGY 152,700, SDN 40,082 on
+# 2026-04-23). Rows above this cap are preserved with raw value noted in the
+# `notes` column; downstream aggregates treat them as zero. Enforced in
+# pipeline/classify.py (primary) and utils/db.insert_conflict_event (backstop).
+MAX_SINGLE_EVENT_FATALITIES = 500
+
 # --- Event Type Resolution (source-agnostic) ---
 # Maps each event type to data source config for resolution.
 # Sources: 'gdelt' (CAMEO-coded), 'internal' (LLM-classified articles).
