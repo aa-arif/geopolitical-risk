@@ -4,6 +4,7 @@ scikit-learn>=1.4.0
 numpy>=1.26.0
 fastapi>=0.115.0
 uvicorn>=0.32.0
+email-validator>=2.0.0
 feedparser>=6.0.0
 requests>=2.31.0
 trafilatura>=1.8.0

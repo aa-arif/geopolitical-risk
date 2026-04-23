@@ -19,17 +19,23 @@ Also serves the built React frontend from frontend/dist as static files.
 
 import os
 import json
+import hashlib
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from pathlib import Path
+from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Request, APIRouter
+from fastapi import FastAPI, HTTPException, Request, APIRouter, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, EmailStr, Field
 
-from config.settings import load_all_country_configs, COUNTRIES, PROJECT_ROOT
+from config.settings import (
+    load_all_country_configs, load_all_available_country_configs,
+    COUNTRIES, PROJECT_ROOT,
+)
 from track_a.predict import predict_track_a
 from utils import risk_level as _risk_level
 from utils.db import (
@@ -749,6 +755,207 @@ def remove_subscriber(subscriber_id: int):
         if not found:
             raise HTTPException(status_code=404, detail="Subscriber not found")
         return {"id": subscriber_id, "status": "deactivated"}
+    finally:
+        conn.close()
+
+
+# --- Ask-a-question endpoints ---
+
+class AskRequest(BaseModel):
+    country_iso3: str = Field(..., min_length=3, max_length=3)
+    scenario: str = Field(..., min_length=10, max_length=500)
+    deadline: date
+    email: EmailStr
+
+
+class AskFeedback(BaseModel):
+    useful: bool
+    note: Optional[str] = None
+
+
+def _compute_request_hash(iso3: str, scenario: str, deadline: str, email: str) -> str:
+    raw = f"{iso3.upper()}|{scenario.strip().lower()}|{deadline}|{email.lower()}"
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
+
+
+def _ask_countries_iso3_set() -> set:
+    """ISO3 codes available for ask-a-question. Uses the active COUNTRIES list."""
+    return set(load_all_country_configs().keys())
+
+
+@api.post("/ask")
+def post_ask(req: AskRequest):
+    """Submit a custom political-risk scenario and receive a probability forecast."""
+    from track_b.ask import generate_ask_forecast
+    from utils.db import insert_subscriber, insert_agent_outputs
+    import time
+
+    iso3 = req.country_iso3.upper()
+    valid_iso3s = _ask_countries_iso3_set()
+    if iso3 not in valid_iso3s:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Country '{iso3}' not supported. Supported: {sorted(valid_iso3s)}",
+        )
+
+    today = datetime.now().astimezone().date()
+    min_deadline = today + timedelta(days=7)
+    max_deadline = today + timedelta(days=180)
+    if req.deadline < min_deadline or req.deadline > max_deadline:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Deadline must be between {min_deadline.isoformat()} and "
+                f"{max_deadline.isoformat()} (inclusive)."
+            ),
+        )
+
+    deadline_iso = req.deadline.isoformat()
+    email = str(req.email)
+    request_hash = _compute_request_hash(iso3, req.scenario, deadline_iso, email)
+
+    conn = get_connection()
+    try:
+        try:
+            insert_subscriber(conn, email=email, tier="free")
+        except Exception as e:
+            if "UNIQUE constraint" not in str(e):
+                raise
+
+        cached_row = conn.execute(
+            """SELECT * FROM predictions
+               WHERE source = 'ask' AND request_hash = ?
+               AND datetime(created_at) > datetime('now', '-24 hours')
+               ORDER BY id DESC LIMIT 1""",
+            (request_hash,),
+        ).fetchone()
+        if cached_row:
+            try:
+                stored = json.loads(cached_row["reasoning_summary"]) if cached_row["reasoning_summary"] else {}
+            except (json.JSONDecodeError, TypeError):
+                stored = {}
+            return _format_ask_response(
+                question_id=cached_row["id"],
+                result=stored,
+                cached=True,
+                originally_generated_at=cached_row["created_at"],
+                response_time_ms=cached_row["response_time_ms"],
+            )
+
+        configs = load_all_country_configs()
+        country_config = configs[iso3]
+
+        start_ms = time.monotonic()
+        result = generate_ask_forecast(
+            country_config=country_config,
+            scenario=req.scenario,
+            user_deadline=deadline_iso,
+            user_email=email,
+            conn=conn,
+        )
+        elapsed_ms = int((time.monotonic() - start_ms) * 1000)
+
+        today_iso = datetime.now().astimezone().strftime("%Y-%m-%d")
+        window_end = deadline_iso
+        prob = result["probability"]
+
+        stored_payload = {k: v for k, v in result.items() if k != "ensemble_results"}
+
+        cursor = conn.execute(
+            """INSERT INTO predictions
+                 (country_iso3, prediction_date, window_end_date, event_type,
+                  track_a_probability, track_b_probability, fused_probability,
+                  extremized_probability, calibrated_probability,
+                  reasoning_summary, source, custom_scenario, user_email,
+                  user_deadline, response_time_ms, cost_usd, request_hash)
+               VALUES (?, ?, ?, 'ask', ?, ?, ?, NULL, NULL, ?, 'ask', ?, ?, ?, ?, NULL, ?)""",
+            (
+                iso3, today_iso, window_end,
+                result["track_a_baseline"], prob, prob,
+                json.dumps(stored_payload, default=str),
+                req.scenario, email, deadline_iso, elapsed_ms, request_hash,
+            ),
+        )
+        prediction_id = cursor.lastrowid
+        conn.commit()
+
+        insert_agent_outputs(conn, prediction_id, iso3, result["ensemble_results"])
+
+        return _format_ask_response(
+            question_id=prediction_id,
+            result=stored_payload,
+            cached=False,
+            originally_generated_at=None,
+            response_time_ms=elapsed_ms,
+        )
+    finally:
+        conn.close()
+
+
+def _format_ask_response(question_id: int, result: dict, cached: bool,
+                          originally_generated_at, response_time_ms) -> dict:
+    return {
+        "question_id": question_id,
+        "cached": cached,
+        "probability": result.get("probability"),
+        "confidence": result.get("confidence"),
+        "track_a_baseline": result.get("track_a_baseline"),
+        "executive_summary": result.get("executive_summary", ""),
+        "narrative_summary": result.get("narrative_summary", ""),
+        "key_risk_factors": result.get("key_risk_factors", []),
+        "key_stabilizing_factors": result.get("key_stabilizing_factors", []),
+        "agent_breakdown": result.get("agent_breakdown", {}),
+        "supervisor_synthesis": result.get("supervisor_synthesis", ""),
+        "agreements": result.get("agreements", []),
+        "disagreements": result.get("disagreements", []),
+        "generated_at": result.get("generated_at"),
+        "originally_generated_at": originally_generated_at,
+        "response_time_ms": response_time_ms,
+        "disclaimer": "Experimental tool. Not financial, political, or operational advice.",
+    }
+
+
+@api.patch("/ask/{question_id}/feedback")
+def patch_ask_feedback(question_id: int, fb: AskFeedback):
+    """Record user feedback on a previously returned ask-a-question answer."""
+    conn = get_connection()
+    try:
+        row = conn.execute(
+            "SELECT id FROM predictions WHERE id = ? AND source = 'ask'",
+            (question_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Question not found")
+
+        conn.execute(
+            "UPDATE predictions SET user_useful = ?, user_note = ? WHERE id = ?",
+            (1 if fb.useful else 0, fb.note, question_id),
+        )
+        conn.commit()
+        return {"status": "recorded"}
+    finally:
+        conn.close()
+
+
+@api.get("/ask/admin/questions")
+def get_ask_admin_questions(x_admin_key: Optional[str] = Header(None)):
+    """Admin-only: last 100 ask submissions."""
+    expected = os.environ.get("PRECURSION_ADMIN_KEY")
+    if not expected or x_admin_key != expected:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+
+    conn = get_connection()
+    try:
+        rows = conn.execute(
+            """SELECT id, country_iso3, custom_scenario, user_email,
+                      user_deadline, track_b_probability, user_useful,
+                      user_note, created_at, cost_usd, response_time_ms
+               FROM predictions
+               WHERE source = 'ask'
+               ORDER BY created_at DESC
+               LIMIT 100"""
+        ).fetchall()
+        return {"questions": [dict(r) for r in rows], "count": len(rows)}
     finally:
         conn.close()
 
